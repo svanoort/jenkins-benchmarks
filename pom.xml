@@ -28,7 +28,7 @@
         <jmh.version>1.13</jmh.version>
         <javac.target>1.7</javac.target>
         <java.level>7</java.level>
-        <jenkins.version>1.642.3</jenkins.version>
+        <jenkins.version>2.7</jenkins.version>
 
         <!-- Name of the benchmark Uber-JAR to generate. -->
         <uberjar.name>benchmarks</uberjar.name>
