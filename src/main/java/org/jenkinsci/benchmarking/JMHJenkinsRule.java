@@ -5,9 +5,9 @@ import hudson.ClassicPluginStrategy;
 import hudson.DNSMultiCast;
 import hudson.FilePath;
 import hudson.Functions;
-import hudson.PluginWrapper;
 import hudson.model.FreeStyleProject;
 import hudson.model.Hudson;
+import hudson.model.Item;
 import hudson.model.Job;
 import hudson.model.UpdateCenter;
 import hudson.model.UpdateSite;
@@ -22,8 +22,10 @@ import org.eclipse.jetty.util.security.Password;
 import org.eclipse.jetty.webapp.Configuration;
 import org.eclipse.jetty.webapp.WebAppContext;
 import org.eclipse.jetty.webapp.WebXmlConfiguration;
+import org.jenkinsci.plugins.workflow.cps.CpsFlowDefinition;
+import org.jenkinsci.plugins.workflow.job.WorkflowJob;
+import org.jenkinsci.plugins.workflow.job.WorkflowRun;
 import org.jvnet.hudson.test.ThreadPoolImpl;
-import org.kohsuke.stapler.StaplerRequest;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.Level;
 import org.openjdk.jmh.annotations.Mode;
@@ -94,8 +96,11 @@ public class JMHJenkinsRule {
     }
 
 
-    public File createJenkinsHome() {
+    public File createJenkinsHome() throws IOException, InterruptedException {
         File base = new File(System.getProperty("java.io.tmpdir"), "jenkinsTests.tmp");
+        if (base.exists()) {
+            new FilePath(base).deleteRecursive()1;
+        }
         base.delete();
         base.mkdirs();
         return base;
@@ -192,6 +197,9 @@ public class JMHJenkinsRule {
     public void setup() throws Exception {
         File homeDir = createJenkinsHome();
         jenkinsInstance = createJenkins(homeDir);
+        if (jenkinsInstance.getItem("Benching") != null) {
+            jenkinsInstance.getItem("Benching").delete();
+        }
         List<String> plugins = Collections.singletonList("workflow-aggregator");
         uberClassLoader = jenkinsInstance.getPluginManager().uberClassLoader;
         installPlugins(jenkinsInstance, plugins);
@@ -210,7 +218,7 @@ public class JMHJenkinsRule {
         j.cleanUp(); // Enters a state where we can kill the thread & dir, without nuking the VM process
     }
 
-    @Benchmark
+//    @Benchmark
     public Job createJob() throws IOException, InterruptedException {
         FreeStyleProject fp = jenkinsInstance.createProject(FreeStyleProject.class, "MyNewProject");
         fp.delete();
@@ -218,17 +226,50 @@ public class JMHJenkinsRule {
     }
 
     @Benchmark
-    public int pipelineBenchmark() {
-        //return -1;
+    public WorkflowRun pipelineBenchmark() throws Exception {
+        WorkflowJob job = jenkinsInstance.createProject(WorkflowJob.class, "Benching");
+        job.setDefinition(new CpsFlowDefinition(
+                "for (int i=0; i<15; i++) {\n" +
+                "    stage \"stage $i\" \n" +
+                "    echo \"ran my stage is $i\"        \n" +
+                "    node {\n" +
+                "        sh 'whoami';\n" +
+                "    }\n" +
+                "}\n" +
+                "\n" +
+                "stage 'label based'\n" +
+                "echo 'wait for executor'\n" +
+                "node {\n" +
+                "    stage 'things using node'\n" +
+                "    for (int i=0; i<200; i++) {\n" +
+                "        echo \"we waited for this $i seconds\"    \n" +
+                "    }\n" +
+                "}"
+        ));
+
+        /** Flow structure (ID - type)
+         2 - FlowStartNode
+         3 - SleepStep
+         4 - EchoStep
+         5 - EchoStep
+         6 - FlowEndNode
+         */
+        job.scheduleBuild2(0);
+        WorkflowRun r = job.scheduleBuild2(0).get();
+        return r;
     }
 
     @TearDown(Level.Trial)
-    public void teardown() {
+    public void teardown() throws Exception {
+        Item i = jenkinsInstance.getItem("Benching");
+        if (i != null) {
+            i.delete();
+        }
         shutdownJenkins(jenkinsInstance);
         jenkinsInstance = null;
         try {
             if (jenkinsHome != null && jenkinsHome.exists()) {
-                new FilePath(jenkinsHome).deleteRecursive();
+                new FilePath(jenkinsHome).deleteRecursive(); // FIXME isn't actually deleting, bugger.
             }
         } catch (InterruptedException|IOException ie) {
             throw new RuntimeException(ie);
@@ -247,10 +288,10 @@ public class JMHJenkinsRule {
                 .timeUnit(TimeUnit.MICROSECONDS)
                 .warmupTime(TimeValue.seconds(30))
                 .warmupIterations(1)
-                .measurementTime(TimeValue.seconds(10))
+                .measurementTime(TimeValue.seconds(30))
                 .measurementIterations(3)
                 .threads(1)
-                .forks(2)
+                .forks(1)
                 .shouldFailOnError(true)
                 .shouldDoGC(true)
                 .build();
