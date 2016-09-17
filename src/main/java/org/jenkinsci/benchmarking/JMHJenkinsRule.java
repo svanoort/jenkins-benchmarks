@@ -5,9 +5,12 @@ import hudson.ClassicPluginStrategy;
 import hudson.DNSMultiCast;
 import hudson.FilePath;
 import hudson.Functions;
+import hudson.PluginWrapper;
 import hudson.model.FreeStyleProject;
 import hudson.model.Hudson;
 import hudson.model.Job;
+import hudson.model.UpdateCenter;
+import hudson.model.UpdateSite;
 import hudson.util.jna.GNUCLibrary;
 import jenkins.model.Jenkins;
 import org.eclipse.jetty.http.MimeTypes;
@@ -33,8 +36,10 @@ import javax.servlet.ServletContext;
 import java.io.File;
 import java.io.IOException;
 import java.net.URL;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.Future;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
@@ -44,6 +49,7 @@ import java.util.logging.Logger;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.server.ServerConnector;
 import org.openjdk.jmh.runner.Runner;
+import org.openjdk.jmh.runner.RunnerException;
 import org.openjdk.jmh.runner.options.Options;
 import org.openjdk.jmh.runner.options.OptionsBuilder;
 import org.openjdk.jmh.runner.options.TimeValue;
@@ -107,10 +113,24 @@ public class JMHJenkinsRule {
         }
     }
 
-    public void installPlugins(Jenkins j, List<String> shortPluginNames) {
-        if (shortPluginNames.size() > 0) {
-            // How do we do this normally?
+    public void installPluginFromLocal() {
+        // Use https://github.com/jenkinsci/parallel-test-executor-plugin/pull/20/files
+        // Or something gnarly with local fetch
+    }
 
+    public void installPlugins(Jenkins j, List<String> shortPluginNames) throws Exception {
+        if (shortPluginNames.size() > 0) {
+            List<Future<UpdateCenter.UpdateCenterJob>> futures = new ArrayList<Future<UpdateCenter.UpdateCenterJob>>();
+            for (String pluginName : shortPluginNames) {
+                UpdateSite.Plugin p = j.getUpdateCenter().getPlugin(pluginName);
+                Future<UpdateCenter.UpdateCenterJob> fut = p.deploy(true);
+                futures.add(fut);
+            }
+            for (Future<UpdateCenter.UpdateCenterJob> fut : futures) {
+                if (fut.get().getError() != null) {
+                    throw new RunnerException(fut.get().getError());
+                }
+            }
         }
     }
 
@@ -169,10 +189,10 @@ public class JMHJenkinsRule {
     // Need to hook the test code into Uberclassloader to be able to
     // access plugin code
     @Setup(Level.Trial)
-    public void setup() {
+    public void setup() throws Exception {
         File homeDir = createJenkinsHome();
         jenkinsInstance = createJenkins(homeDir);
-        List<String> plugins = Collections.emptyList();
+        List<String> plugins = Collections.singletonList("workflow-aggregator");
         uberClassLoader = jenkinsInstance.getPluginManager().uberClassLoader;
         installPlugins(jenkinsInstance, plugins);
     }
@@ -197,6 +217,11 @@ public class JMHJenkinsRule {
         return fp;
     }
 
+    @Benchmark
+    public int pipelineBenchmark() {
+        //return -1;
+    }
+
     @TearDown(Level.Trial)
     public void teardown() {
         shutdownJenkins(jenkinsInstance);
@@ -212,6 +237,7 @@ public class JMHJenkinsRule {
     }
 
     public static void main(String[] args) throws Exception {
+
         Options opt = new OptionsBuilder()
                 // Specify which benchmarks to run.
                 // You can be more specific if you'd like to run only one benchmark per test.
