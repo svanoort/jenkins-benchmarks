@@ -95,13 +95,20 @@ public class JMHJenkinsRule {
         }
     }
 
+    /** If true the JenkinsHome gets deleted every time */
+    public boolean deleteHome = false;
+
+    /** By setting this to non-null, we can pass in a custom Jenkins home directory for benchmarking */
+    public String jenkinsHomeOverride = null;
 
     public File createJenkinsHome() throws IOException, InterruptedException {
-        File base = new File(System.getProperty("java.io.tmpdir"), "jenkinsTests.tmp");
-        if (base.exists()) {
+        File base = (jenkinsHomeOverride != null && !jenkinsHomeOverride.isEmpty()) ?
+                new File(jenkinsHomeOverride) :
+                new File(System.getProperty("java.io.tmpdir"), "jenkinsTests.tmp");
+        if (base.exists() && deleteHome) {
             new FilePath(base).deleteRecursive();
+            base.delete();
         }
-        base.delete();
         base.mkdirs();
         return base;
     }
@@ -126,7 +133,12 @@ public class JMHJenkinsRule {
     public void installPlugins(Jenkins j, List<String> shortPluginNames) throws Exception {
         if (shortPluginNames.size() > 0) {
             List<Future<UpdateCenter.UpdateCenterJob>> futures = new ArrayList<Future<UpdateCenter.UpdateCenterJob>>();
+            UpdateCenter up = j.getUpdateCenter();
+            if (up.getAvailables().size() == 0) {
+                up.updateAllSites();
+            }
             for (String pluginName : shortPluginNames) {
+
                 UpdateSite.Plugin p = j.getUpdateCenter().getPlugin(pluginName);
                 Future<UpdateCenter.UpdateCenterJob> fut = p.deploy(true);
                 futures.add(fut);
@@ -202,7 +214,12 @@ public class JMHJenkinsRule {
         }
         List<String> plugins = Collections.singletonList("workflow-aggregator");
         uberClassLoader = jenkinsInstance.getPluginManager().uberClassLoader;
-//        installPlugins(jenkinsInstance, plugins);
+        installPlugins(jenkinsInstance, plugins);
+
+        Item it = jenkinsInstance.getItem("Benching");
+        if (it != null) {
+            it.delete();
+        }
     }
 
     /**
@@ -215,17 +232,18 @@ public class JMHJenkinsRule {
 
 
     public void shutdownJenkins(Jenkins j) {
+
         j.cleanUp(); // Enters a state where we can kill the thread & dir, without nuking the VM process
     }
 
-    @Benchmark
+//    @Benchmark
     public Job createJob() throws IOException, InterruptedException {
         FreeStyleProject fp = jenkinsInstance.createProject(FreeStyleProject.class, "MyNewProject");
         fp.delete();
         return fp;
     }
 
-    /*@Benchmark
+    @Benchmark
     public WorkflowRun pipelineBenchmark() throws Exception {
         WorkflowJob job = jenkinsInstance.createProject(WorkflowJob.class, "Benching");
         job.setDefinition(new CpsFlowDefinition(
@@ -250,7 +268,7 @@ public class JMHJenkinsRule {
         job.scheduleBuild2(0);
         WorkflowRun r = job.scheduleBuild2(0).get();
         return r;
-    }*/
+    }
 
     @TearDown(Level.Trial)
     public void teardown() throws Exception {
@@ -261,7 +279,7 @@ public class JMHJenkinsRule {
         shutdownJenkins(jenkinsInstance);
         jenkinsInstance = null;
         try {
-            if (jenkinsHome != null && jenkinsHome.exists()) {
+            if (jenkinsHome != null && jenkinsHome.exists() && deleteHome) {
                 new FilePath(jenkinsHome).deleteRecursive(); // FIXME isn't actually deleting, bugger.
             }
         } catch (InterruptedException|IOException ie) {
@@ -271,6 +289,11 @@ public class JMHJenkinsRule {
     }
 
     public static void main(String[] args) throws Exception {
+
+        /*JMHJenkinsRule jmr = new JMHJenkinsRule();
+        jmr.setup();
+        jmr.createJob();
+        jmr.teardown();*/
 
         Options opt = new OptionsBuilder()
                 // Specify which benchmarks to run.
@@ -290,5 +313,4 @@ public class JMHJenkinsRule {
                 .build();
         new Runner(opt).run();
     }
-
 }
