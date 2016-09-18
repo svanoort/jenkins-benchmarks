@@ -5,6 +5,7 @@ import hudson.ClassicPluginStrategy;
 import hudson.DNSMultiCast;
 import hudson.FilePath;
 import hudson.Functions;
+import hudson.PluginManager;
 import hudson.model.FreeStyleProject;
 import hudson.model.Hudson;
 import hudson.model.Item;
@@ -130,19 +131,26 @@ public class JMHJenkinsRule {
         // Or something gnarly with local fetch
     }
 
-    public void installPlugins(Jenkins j, List<String> shortPluginNames) throws Exception {
-        if (shortPluginNames.size() > 0) {
-            List<Future<UpdateCenter.UpdateCenterJob>> futures = new ArrayList<Future<UpdateCenter.UpdateCenterJob>>();
-            UpdateCenter up = j.getUpdateCenter();
+    public void installPluginsFromUpdateCenter(List<String> shortPluginNames) throws Exception {
+        List<String> notInstalledYet = new ArrayList<String>(shortPluginNames.size());
+        PluginManager pm = jenkinsInstance.getPluginManager();
+        for (String s : shortPluginNames) {
+            if (pm.getPlugin(s) == null) {
+                notInstalledYet.add(s);
+            }
+        }
+        if (notInstalledYet.size() > 0) {
+            UpdateCenter up = jenkinsInstance.getUpdateCenter();
             if (up.getAvailables().size() == 0) {
                 up.updateAllSites();
             }
-            for (String pluginName : shortPluginNames) {
-
-                UpdateSite.Plugin p = j.getUpdateCenter().getPlugin(pluginName);
+            List<Future<UpdateCenter.UpdateCenterJob>> futures = new ArrayList<Future<UpdateCenter.UpdateCenterJob>>();
+            for (String pluginName : notInstalledYet) {
+                UpdateSite.Plugin p = jenkinsInstance.getUpdateCenter().getPlugin(pluginName);
                 Future<UpdateCenter.UpdateCenterJob> fut = p.deploy(true);
                 futures.add(fut);
             }
+            // Deployment errors, boo!
             for (Future<UpdateCenter.UpdateCenterJob> fut : futures) {
                 if (fut.get().getError() != null) {
                     throw new RunnerException(fut.get().getError());
@@ -206,7 +214,7 @@ public class JMHJenkinsRule {
     // Need to hook the test code into Uberclassloader to be able to
     // access plugin code
     @Setup(Level.Trial)
-    public void setup() throws Exception {
+    public void setupBenchmark() throws Exception {
         File homeDir = createJenkinsHome();
         jenkinsInstance = createJenkins(homeDir);
         if (jenkinsInstance.getItem("Benching") != null) {
@@ -214,7 +222,7 @@ public class JMHJenkinsRule {
         }
         List<String> plugins = Collections.singletonList("workflow-aggregator");
         uberClassLoader = jenkinsInstance.getPluginManager().uberClassLoader;
-        installPlugins(jenkinsInstance, plugins);
+        installPluginsFromUpdateCenter(jenkinsInstance, plugins);
 
         Item it = jenkinsInstance.getItem("Benching");
         if (it != null) {
@@ -231,9 +239,13 @@ public class JMHJenkinsRule {
     }
 
 
-    public void shutdownJenkins(Jenkins j) {
-
-        j.cleanUp(); // Enters a state where we can kill the thread & dir, without nuking the VM process
+    public void shutdownJenkins() throws Exception {
+        jenkinsInstance.cleanUp();
+        server.stop();
+        //jenkinsInstance.cleanUp(); // Enters a state where we can kill the thread & dir, without nuking the VM process
+        //jenkinsInstance.isTerminating()
+        jenkinsInstance = null;
+        server = null;
     }
 
 //    @Benchmark
@@ -241,6 +253,15 @@ public class JMHJenkinsRule {
         FreeStyleProject fp = jenkinsInstance.createProject(FreeStyleProject.class, "MyNewProject");
         fp.delete();
         return fp;
+    }
+
+    /** Removes old projects */
+    @Setup(Level.Iteration)
+    public void setupPerRun() throws Exception {
+        Item i = jenkinsInstance.getItem("Benching");
+        if (i != null) {
+            i.delete();
+        }
     }
 
     @Benchmark
@@ -270,17 +291,20 @@ public class JMHJenkinsRule {
         return r;
     }
 
-    @TearDown(Level.Trial)
-    public void teardown() throws Exception {
+    @TearDown(Level.Iteration)
+    public void tearDownPerRun() throws Exception {
         Item i = jenkinsInstance.getItem("Benching");
         if (i != null) {
             i.delete();
         }
-        shutdownJenkins(jenkinsInstance);
-        jenkinsInstance = null;
+    }
+
+    @TearDown(Level.Trial)
+    public void teardownBenchmark() throws Exception {
+        shutdownJenkins();
         try {
             if (jenkinsHome != null && jenkinsHome.exists() && deleteHome) {
-                new FilePath(jenkinsHome).deleteRecursive(); // FIXME isn't actually deleting, bugger.
+                new FilePath(jenkinsHome).deleteRecursive();
             }
         } catch (InterruptedException|IOException ie) {
             throw new RuntimeException(ie);
@@ -291,9 +315,9 @@ public class JMHJenkinsRule {
     public static void main(String[] args) throws Exception {
 
         /*JMHJenkinsRule jmr = new JMHJenkinsRule();
-        jmr.setup();
+        jmr.setupBenchmark();
         jmr.createJob();
-        jmr.teardown();*/
+        jmr.teardownBenchmark();*/
 
         Options opt = new OptionsBuilder()
                 // Specify which benchmarks to run.
