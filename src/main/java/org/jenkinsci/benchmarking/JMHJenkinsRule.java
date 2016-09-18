@@ -99,7 +99,7 @@ public class JMHJenkinsRule {
     public File createJenkinsHome() throws IOException, InterruptedException {
         File base = new File(System.getProperty("java.io.tmpdir"), "jenkinsTests.tmp");
         if (base.exists()) {
-            new FilePath(base).deleteRecursive()1;
+            new FilePath(base).deleteRecursive();
         }
         base.delete();
         base.mkdirs();
@@ -202,7 +202,7 @@ public class JMHJenkinsRule {
         }
         List<String> plugins = Collections.singletonList("workflow-aggregator");
         uberClassLoader = jenkinsInstance.getPluginManager().uberClassLoader;
-        installPlugins(jenkinsInstance, plugins);
+//        installPlugins(jenkinsInstance, plugins);
     }
 
     /**
@@ -218,14 +218,14 @@ public class JMHJenkinsRule {
         j.cleanUp(); // Enters a state where we can kill the thread & dir, without nuking the VM process
     }
 
-//    @Benchmark
+    @Benchmark
     public Job createJob() throws IOException, InterruptedException {
         FreeStyleProject fp = jenkinsInstance.createProject(FreeStyleProject.class, "MyNewProject");
         fp.delete();
         return fp;
     }
 
-    @Benchmark
+    /*@Benchmark
     public WorkflowRun pipelineBenchmark() throws Exception {
         WorkflowJob job = jenkinsInstance.createProject(WorkflowJob.class, "Benching");
         job.setDefinition(new CpsFlowDefinition(
@@ -247,17 +247,10 @@ public class JMHJenkinsRule {
                 "}"
         ));
 
-        /** Flow structure (ID - type)
-         2 - FlowStartNode
-         3 - SleepStep
-         4 - EchoStep
-         5 - EchoStep
-         6 - FlowEndNode
-         */
         job.scheduleBuild2(0);
         WorkflowRun r = job.scheduleBuild2(0).get();
         return r;
-    }
+    }*/
 
     @TearDown(Level.Trial)
     public void teardown() throws Exception {
