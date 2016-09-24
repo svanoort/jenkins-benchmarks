@@ -2,7 +2,6 @@ package org.jenkinsci.harness;
 
 import java.io.File;
 import java.io.IOException;
-import java.lang.reflect.Method;
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.nio.file.Files;
@@ -17,7 +16,7 @@ import org.eclipse.jetty.webapp.WebAppContext;
 
 // Runs Jenkins in an isolated classLoader: note we can't call any Jenkins methods here
 // Those all have to be in the testcase main (
-public class Runner {
+public class JenkinsMaskedClassesRunner {
 
     public static void run(Class<? extends Callable<?>> callableClass) throws Exception {
         Server server = new Server(8080); // TODO bind only to localhost
@@ -58,7 +57,7 @@ public class Runner {
             // TODO Failed to load class "org.slf4j.impl.StaticLoggerBinder".
             // Just load things from the test classpath which are in fact from Jetty, or from the Java platform.
             // Masker may need to load Hamcrest, etc which are used in testing but not part of jenkins
-            ClassLoader masker = new ClassLoader(Runner.class.getClassLoader()) {
+            ClassLoader masker = new ClassLoader(JenkinsMaskedClassesRunner.class.getClassLoader()) {
                 final ClassLoader javaLoader = getParent().getParent();
                 @Override protected Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {
                     if (name.matches("(org[.]eclipse[.]jetty|javax[.]servlet)[.].+")) {
@@ -98,7 +97,7 @@ public class Runner {
 
             // New we can use the uberclassloader which sees all the jenkins plugins too
             ClassLoader uberClassLoader = (ClassLoader) pluginManager.getClass().getField("uberClassLoader").get(pluginManager);
-            ClassLoader testLoader = new URLClassLoader(((URLClassLoader)Runner.class.getClassLoader()).getURLs(), uberClassLoader);
+            ClassLoader testLoader = new URLClassLoader(((URLClassLoader)JenkinsMaskedClassesRunner.class.getClassLoader()).getURLs(), uberClassLoader);
                     //new URLClassLoader(urls, uberClassLoader);  // Set up classpath which points at classes inside Jenkins
 
             try {

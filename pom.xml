@@ -8,6 +8,8 @@
     <modules>
         <module>harness</module>
         <module>test</module>
+        <!--<module>old-benchmarking</module>-->
+        <module>benchmark-start</module>
     </modules>
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>

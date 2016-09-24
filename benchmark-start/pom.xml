@@ -6,8 +6,15 @@
         <artifactId>masking-demo</artifactId>
         <version>1.0-SNAPSHOT</version>
     </parent>
-    <artifactId>test</artifactId>
+    <artifactId>benchmark-start</artifactId>
     <packaging>jar</packaging>
+
+    <properties>
+        <jmh.version>1.13</jmh.version>
+        <maven.compiler.source>1.7</maven.compiler.source>
+        <maven.compiler.target>1.7</maven.compiler.target>
+    </properties>
+
     <dependencies>
         <dependency>
             <groupId>org.jenkins-ci.plugins.workflow</groupId>
@@ -31,9 +38,17 @@
             <artifactId>harness</artifactId>
             <version>${project.version}</version>
         </dependency>
+
+        <!-- JMH specific stuff -->
+        <dependency>
+            <groupId>org.openjdk.jmh</groupId>
+            <artifactId>jmh-core</artifactId>
+            <version>${jmh.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.openjdk.jmh</groupId>
+            <artifactId>jmh-generator-annprocess</artifactId>
+            <version>${jmh.version}</version>
+        </dependency>
     </dependencies>
-    <properties>
-        <maven.compiler.source>1.7</maven.compiler.source>
-        <maven.compiler.target>1.7</maven.compiler.target>
-    </properties>
 </project>

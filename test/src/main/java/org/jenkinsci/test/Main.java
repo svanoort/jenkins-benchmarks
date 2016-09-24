@@ -3,7 +3,7 @@ package org.jenkinsci.test;
 import hudson.model.FreeStyleProject;
 import java.util.concurrent.Callable;
 import jenkins.model.Jenkins;
-import org.jenkinsci.harness.Runner;
+import org.jenkinsci.harness.JenkinsMaskedClassesRunner;
 import org.jenkinsci.plugins.workflow.cps.CpsFlowDefinition;
 import org.jenkinsci.plugins.workflow.job.WorkflowJob;
 import org.jenkinsci.plugins.workflow.job.WorkflowRun;
@@ -20,6 +20,6 @@ public class Main implements Callable<Void> {
         return null;
     }
     public static void main(String[] args) throws Exception {
-        Runner.run(Main.class);
+        JenkinsMaskedClassesRunner.run(Main.class);
     }
 }
