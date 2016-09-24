@@ -128,7 +128,17 @@ public class JMHJenkinsRule {
         System.setProperty("jenkins.install.runSetupWizard", "false");
         try {
             ServletContext webServer = createWebServer();
-            return new Hudson(homedir, webServer);
+            // tell jetty to load WAR file
+            // once initialized, give ref to the classloader
+            // Then use the classloader + reflection to get the Jenkins
+            // Next create an urlclassloader that is the parent of UberClassloader..?
+
+            // Can't have urlclassloader delegate to application classloader for anything...?
+            Jenkins j = new Hudson(homedir, webServer);
+            Class jenkinsClass = j.getPluginManager().uberClassLoader.loadClass("jenkins.model.Jenkins");
+            j.getClass()
+
+            return j;
         } catch (Exception ex) {
             throw new RuntimeException(ex);
         }
@@ -284,8 +294,6 @@ public class JMHJenkinsRule {
         server.stop();
         server.join();
 
-        //jenkinsInstance.cleanUp(); // Enters a state where we can kill the thread & dir, without nuking the VM process
-        //jenkinsInstance.isTerminating()
         jenkinsInstance = null;
         server = null;
     }
@@ -299,7 +307,7 @@ public class JMHJenkinsRule {
 
 //    @Benchmark
     public WorkflowRun runWFJob() throws IOException, InterruptedException, ExecutionException {
-        Item i = jenkinsInstance.getItem("Bench2");
+        Item i = jenkinsInstance.getItem("simplepipeline2");
 //        Item i = jenkinsInstance.getItem("simple");
         WorkflowRun run = ((WorkflowJob)i).scheduleBuild2(0).get();
         if (run.getResult() == Result.FAILURE) {
@@ -316,6 +324,26 @@ public class JMHJenkinsRule {
             System.out.println("Setup removed benching job");
             i.delete();
         }
+    }
+
+    //    @Benchmark
+    public WorkflowRun simplePipelineBenchmark() throws Exception {
+        Item i = jenkinsInstance.getItem("simplepipeline");
+        if (i != null) {
+            i.delete();
+        }
+        WorkflowJob job = jenkinsInstance.createProject(WorkflowJob.class, "simplepipeline");
+        job.setDefinition(new CpsFlowDefinition(
+                        "    stage 'mystage' \n" +
+                        "    echo 'ran my stage is running'"
+        ));
+
+        job.scheduleBuild2(0);
+        WorkflowRun r = job.scheduleBuild2(0).get();
+        if (r.getResult() == Result.FAILURE) {
+            System.out.println(r.getLog());
+        }
+        return r;
     }
 
 //    @Benchmark
@@ -373,13 +401,14 @@ public class JMHJenkinsRule {
 
     public static void main(String[] args) throws Exception {
 
-        /*JMHJenkinsRule jmr = new JMHJenkinsRule();
-        jmr.jenkinsHomeOverride="~/Downloads/OSS-LTS/graph-examples/";
+        JMHJenkinsRule jmr = new JMHJenkinsRule();
+//        jmr.jenkinsHomeOverride="~/Downloads/OSS-LTS/graph-examples/";
         jmr.setupBenchmark();
         Thread.sleep(5000);
         jmr.runWFJob();
-        jmr.teardownBenchmark();*/
+        jmr.teardownBenchmark();
 
+        /*
         Options opt = new OptionsBuilder()
                 // Specify which benchmarks to run.
                 // You can be more specific if you'd like to run only one benchmark per test.
@@ -396,6 +425,6 @@ public class JMHJenkinsRule {
                 .shouldFailOnError(true)
                 .shouldDoGC(true)
                 .build();
-        new Runner(opt).run();
+        new Runner(opt).run();*/
     }
 }
