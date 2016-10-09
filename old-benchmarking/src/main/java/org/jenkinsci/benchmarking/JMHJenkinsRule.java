@@ -5,25 +5,33 @@ import hudson.ClassicPluginStrategy;
 import hudson.DNSMultiCast;
 import hudson.FilePath;
 import hudson.Functions;
-import hudson.PluginWrapper;
+import hudson.PluginManager;
 import hudson.model.FreeStyleProject;
 import hudson.model.Hudson;
+import hudson.model.Item;
 import hudson.model.Job;
+import hudson.model.Result;
+import hudson.model.Run;
+import hudson.model.TaskListener;
 import hudson.model.UpdateCenter;
 import hudson.model.UpdateSite;
+import hudson.model.listeners.RunListener;
 import hudson.util.jna.GNUCLibrary;
 import jenkins.model.Jenkins;
 import org.eclipse.jetty.http.MimeTypes;
 import org.eclipse.jetty.security.HashLoginService;
 import org.eclipse.jetty.security.LoginService;
+import org.eclipse.jetty.server.Connector;
 import org.eclipse.jetty.server.HttpConfiguration;
 import org.eclipse.jetty.server.HttpConnectionFactory;
 import org.eclipse.jetty.util.security.Password;
 import org.eclipse.jetty.webapp.Configuration;
 import org.eclipse.jetty.webapp.WebAppContext;
 import org.eclipse.jetty.webapp.WebXmlConfiguration;
+import org.jenkinsci.plugins.workflow.cps.CpsFlowDefinition;
+import org.jenkinsci.plugins.workflow.job.WorkflowJob;
+import org.jenkinsci.plugins.workflow.job.WorkflowRun;
 import org.jvnet.hudson.test.ThreadPoolImpl;
-import org.kohsuke.stapler.StaplerRequest;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.Level;
 import org.openjdk.jmh.annotations.Mode;
@@ -32,6 +40,7 @@ import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.TearDown;
 
+import javax.annotation.Nonnull;
 import javax.servlet.ServletContext;
 import java.io.File;
 import java.io.IOException;
@@ -39,6 +48,7 @@ import java.net.URL;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadFactory;
@@ -93,11 +103,22 @@ public class JMHJenkinsRule {
         }
     }
 
+    /** If true the JenkinsHome gets deleted every time */
+    public boolean deleteHome = false;
 
-    public File createJenkinsHome() {
-        File base = new File(System.getProperty("java.io.tmpdir"), "jenkinsTests.tmp");
-        base.delete();
+    /** By setting this to non-null, we can pass in a custom Jenkins home directory for benchmarking */
+    public String jenkinsHomeOverride = null;
+
+    public File createJenkinsHome() throws IOException, InterruptedException {
+        File base = (jenkinsHomeOverride != null && !jenkinsHomeOverride.isEmpty()) ?
+                new File(jenkinsHomeOverride) :
+                new File(System.getProperty("java.io.tmpdir"), "jenkinsTests.tmp");
+        if (base.exists() && deleteHome) {
+            new FilePath(base).deleteRecursive();
+            base.delete();
+        }
         base.mkdirs();
+        System.out.println("Using jenkins_home: "+base);
         return base;
     }
 
@@ -107,7 +128,17 @@ public class JMHJenkinsRule {
         System.setProperty("jenkins.install.runSetupWizard", "false");
         try {
             ServletContext webServer = createWebServer();
-            return new Hudson(homedir, webServer);
+            // tell jetty to load WAR file
+            // once initialized, give ref to the classloader
+            // Then use the classloader + reflection to get the Jenkins
+            // Next create an urlclassloader that is the parent of UberClassloader..?
+
+            // Can't have urlclassloader delegate to application classloader for anything...?
+            Jenkins j = new Hudson(homedir, webServer);
+            Class jenkinsClass = j.getPluginManager().uberClassLoader.loadClass("jenkins.model.Jenkins");
+            j.getClass()
+
+            return j;
         } catch (Exception ex) {
             throw new RuntimeException(ex);
         }
@@ -118,14 +149,52 @@ public class JMHJenkinsRule {
         // Or something gnarly with local fetch
     }
 
-    public void installPlugins(Jenkins j, List<String> shortPluginNames) throws Exception {
-        if (shortPluginNames.size() > 0) {
+    public void installPluginsFromUpdateCenter(List<String> shortPluginNames) throws Exception {
+        List<String> notInstalledYet = new ArrayList<String>(shortPluginNames.size());
+        PluginManager pm = jenkinsInstance.getPluginManager();
+        for (String s : shortPluginNames) {
+            if (pm.getPlugin(s) == null) {
+                notInstalledYet.add(s);
+            }
+        }
+        if (notInstalledYet.size() > 0) {
+            UpdateCenter up = jenkinsInstance.getUpdateCenter();
+            if (up.getAvailables().size() == 0) {
+                up.updateAllSites();
+            }
             List<Future<UpdateCenter.UpdateCenterJob>> futures = new ArrayList<Future<UpdateCenter.UpdateCenterJob>>();
-            for (String pluginName : shortPluginNames) {
-                UpdateSite.Plugin p = j.getUpdateCenter().getPlugin(pluginName);
+            for (String pluginName : notInstalledYet) {
+                UpdateSite.Plugin p = jenkinsInstance.getUpdateCenter().getPlugin(pluginName);
                 Future<UpdateCenter.UpdateCenterJob> fut = p.deploy(true);
                 futures.add(fut);
             }
+            // Deployment errors, boo!
+            for (Future<UpdateCenter.UpdateCenterJob> fut : futures) {
+                if (fut.get().getError() != null) {
+                    throw new RunnerException(fut.get().getError());
+                }
+            }
+        }
+    }
+
+    public void updatePluginsFromUpdateCenter(List<String> shortPluginNames) throws Exception {
+        PluginManager pm = jenkinsInstance.getPluginManager();
+        if (shortPluginNames.size() > 0) {
+            UpdateCenter up = jenkinsInstance.getUpdateCenter();
+            if (up.getAvailables().size() == 0) {
+                up.updateAllSites();
+            }
+            List<Future<UpdateCenter.UpdateCenterJob>> futures = new ArrayList<Future<UpdateCenter.UpdateCenterJob>>();
+            for (String pluginName : shortPluginNames) {
+                UpdateSite.Plugin plug = jenkinsInstance.getUpdateCenter().getPlugin(pluginName);
+                if (plug.isNewerThan(pm.getPlugin(pluginName).getVersion())) {
+                    plug.deploy(true);
+                }
+                UpdateSite.Plugin p = jenkinsInstance.getUpdateCenter().getPlugin(pluginName);
+                Future<UpdateCenter.UpdateCenterJob> fut = p.deploy(true);
+                futures.add(fut);
+            }
+            // Deployment errors, boo!
             for (Future<UpdateCenter.UpdateCenterJob> fut : futures) {
                 if (fut.get().getError() != null) {
                     throw new RunnerException(fut.get().getError());
@@ -189,12 +258,22 @@ public class JMHJenkinsRule {
     // Need to hook the test code into Uberclassloader to be able to
     // access plugin code
     @Setup(Level.Trial)
-    public void setup() throws Exception {
+    public void setupBenchmark() throws Exception {
         File homeDir = createJenkinsHome();
         jenkinsInstance = createJenkins(homeDir);
+        if (jenkinsInstance.getItem("Benching") != null) {
+            jenkinsInstance.getItem("Benching").delete();
+        }
         List<String> plugins = Collections.singletonList("workflow-aggregator");
         uberClassLoader = jenkinsInstance.getPluginManager().uberClassLoader;
-        installPlugins(jenkinsInstance, plugins);
+//        installPluginsFromUpdateCenter(plugins);
+//        updatePluginsFromUpdateCenter(Collections.singletonList("credentials"));
+
+        Item it = jenkinsInstance.getItem("Benching");
+        if (it != null) {
+            System.out.println("Overall setup for bench removed benching job");
+            it.delete();
+        }
     }
 
     /**
@@ -206,28 +285,112 @@ public class JMHJenkinsRule {
     }
 
 
-    public void shutdownJenkins(Jenkins j) {
-        j.cleanUp(); // Enters a state where we can kill the thread & dir, without nuking the VM process
+    public void shutdownJenkins() throws Exception {
+        jenkinsInstance.cleanUp();
+        Connector[] conns = server.getConnectors();
+        for (Connector c : conns) {
+            server.removeConnector(c);
+        }
+        server.stop();
+        server.join();
+
+        jenkinsInstance = null;
+        server = null;
     }
 
-    @Benchmark
+    /*@Benchmark
     public Job createJob() throws IOException, InterruptedException {
         FreeStyleProject fp = jenkinsInstance.createProject(FreeStyleProject.class, "MyNewProject");
         fp.delete();
         return fp;
+    }*/
+
+//    @Benchmark
+    public WorkflowRun runWFJob() throws IOException, InterruptedException, ExecutionException {
+        Item i = jenkinsInstance.getItem("simplepipeline2");
+//        Item i = jenkinsInstance.getItem("simple");
+        WorkflowRun run = ((WorkflowJob)i).scheduleBuild2(0).get();
+        if (run.getResult() == Result.FAILURE) {
+            System.out.print(run.getLog());
+        }
+        return run;
     }
 
-    @Benchmark
-    public int pipelineBenchmark() {
-        //return -1;
+    /** Removes old projects */
+    @Setup(Level.Iteration)
+    public void setupPerRun() throws Exception {
+        Item i = jenkinsInstance.getItem("Benching");
+        if (i != null) {
+            System.out.println("Setup removed benching job");
+            i.delete();
+        }
+    }
+
+    //    @Benchmark
+    public WorkflowRun simplePipelineBenchmark() throws Exception {
+        Item i = jenkinsInstance.getItem("simplepipeline");
+        if (i != null) {
+            i.delete();
+        }
+        WorkflowJob job = jenkinsInstance.createProject(WorkflowJob.class, "simplepipeline");
+        job.setDefinition(new CpsFlowDefinition(
+                        "    stage 'mystage' \n" +
+                        "    echo 'ran my stage is running'"
+        ));
+
+        job.scheduleBuild2(0);
+        WorkflowRun r = job.scheduleBuild2(0).get();
+        if (r.getResult() == Result.FAILURE) {
+            System.out.println(r.getLog());
+        }
+        return r;
+    }
+
+//    @Benchmark
+    public WorkflowRun pipelineBenchmark() throws Exception {
+        Item i = jenkinsInstance.getItem("Benching");
+        if (i != null) {
+            i.delete();
+        }
+        WorkflowJob job = jenkinsInstance.createProject(WorkflowJob.class, "Benching");
+        job.setDefinition(new CpsFlowDefinition(
+                "for (int i=0; i<15; i++) {\n" +
+                "    stage \"stage $i\" \n" +
+                "    echo 'ran my stage is '+i        \n" +
+                "    node {\n" +
+                "        sh 'whoami';\n" +
+                "    }\n" +
+                "}\n" +
+                "\n" +
+                "stage 'label based'\n" +
+                "echo 'wait for executor'\n" +
+                "node {\n" +
+                "    stage 'things using node'\n" +
+                "    for (int i=0; i<200; i++) {\n" +
+                "        echo \"we waited for this $i seconds\"    \n" +
+                "    }\n" +
+                "}"
+        ));
+
+        job.scheduleBuild2(0);
+        WorkflowRun r = job.scheduleBuild2(0).get();
+        return r;
+    }
+
+    @TearDown(Level.Iteration)
+    public void tearDownPerRun() throws Exception {
+        Item i = jenkinsInstance.getItem("Benching");
+        if (i != null) {
+            System.out.println("Teardown removed benching job");
+            i.delete();
+        }
     }
 
     @TearDown(Level.Trial)
-    public void teardown() {
-        shutdownJenkins(jenkinsInstance);
-        jenkinsInstance = null;
+    public void teardownBenchmark() throws Exception {
+        shutdownJenkins();
         try {
-            if (jenkinsHome != null && jenkinsHome.exists()) {
+            if (jenkinsHome != null && jenkinsHome.exists() && deleteHome) {
                 new FilePath(jenkinsHome).deleteRecursive();
             }
         } catch (InterruptedException|IOException ie) {
@@ -238,6 +401,14 @@ public class JMHJenkinsRule {
 
     public static void main(String[] args) throws Exception {
 
+        JMHJenkinsRule jmr = new JMHJenkinsRule();
+//        jmr.jenkinsHomeOverride="~/Downloads/OSS-LTS/graph-examples/";
+        jmr.setupBenchmark();
+        Thread.sleep(5000);
+        jmr.runWFJob();
+        jmr.teardownBenchmark();
+
+        /*
         Options opt = new OptionsBuilder()
                 // Specify which benchmarks to run.
                 // You can be more specific if you'd like to run only one benchmark per test.
@@ -247,14 +418,13 @@ public class JMHJenkinsRule {
                 .timeUnit(TimeUnit.MICROSECONDS)
                 .warmupTime(TimeValue.seconds(30))
                 .warmupIterations(1)
-                .measurementTime(TimeValue.seconds(10))
+                .measurementTime(TimeValue.seconds(30))
                 .measurementIterations(3)
                 .threads(1)
-                .forks(2)
+                .forks(1)
                 .shouldFailOnError(true)
                 .shouldDoGC(true)
                 .build();
-        new Runner(opt).run();
+        new Runner(opt).run();*/
     }
-
 }
