@@ -20,6 +20,7 @@ public class Main implements Callable<Void> {
         return null;
     }
     public static void main(String[] args) throws Exception {
-        JenkinsMaskedClassesRunner.run(Main.class);
+        JenkinsMaskedClassesRunner runner = new JenkinsMaskedClassesRunner();
+        runner.runSingle(Main.class);
     }
 }
