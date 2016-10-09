@@ -37,8 +37,7 @@ public class JenkinsMaskedClassesRunner {
         // Set up a WAR and plugin path to drop into our home for startup
         for (String elt : System.getProperty("java.class.path").split(File.pathSeparator)) {
             if (elt.endsWith(".jar")) {
-                File f = new File(elt.replaceFirst("[.]jar$", ".hpi"));
-                // Problem: you can have a JAR on the classpath without having the HPI :-(
+                File f = new File(elt.replaceFirst("[.]jar$", ".hpi"));  // Works b/c we downloaded the HPI files too
                 if (f.isFile()) {
                     File jpi = new File(plugins, f.getName().replace(".hpi", ".jpi")); // TODO strip out version
                     Files.copy(f.toPath(), jpi.toPath());
@@ -100,13 +99,13 @@ public class JenkinsMaskedClassesRunner {
         Thread.sleep(15000); // TODO call WebAppMain.joinInit so it can handle long startups
 
         // Gets the classloader for jenkins itself without plugins
-        ClassLoader coreLoader = webapp.getClassLoader();
+        coreLoader = webapp.getClassLoader();
         jenkinsClass = coreLoader.loadClass("jenkins.model.Jenkins");
         jenkinsInstance = jenkinsClass.getMethod("getInstance").invoke(null);
         Object pluginManager = jenkinsClass.getMethod("getPluginManager").invoke(jenkinsInstance);
 
         // New we can use the uberclassloader which sees all the jenkins plugins too
-        ClassLoader uberClassLoader = (ClassLoader) pluginManager.getClass().getField("uberClassLoader").get(pluginManager);
+        uberClassLoader = (ClassLoader) pluginManager.getClass().getField("uberClassLoader").get(pluginManager);
     }
 
     public void shutdown() throws Exception {
