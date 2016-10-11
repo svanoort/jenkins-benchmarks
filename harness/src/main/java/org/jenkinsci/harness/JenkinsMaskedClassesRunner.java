@@ -98,8 +98,17 @@ public class JenkinsMaskedClassesRunner {
         };
         // Startup without polluting the webapp with test classes
         webapp.setClassLoader(new WebAppClassLoader(masker, webapp));
+
+        // Startup fixes & optimizations, goes from 19 seconds from doStart to 15 sec (just thread sleep)
         System.setProperty("hudson.Main.development", "true");
-        System.setProperty("jenkins.install.runSetupWizard", "false");
+        System.setProperty("hudson.model.UpdateCenter.never", "true"); // Checking for updates is slow & not needed when we prepopulate plugins
+        System.setProperty("hudson.model.DownloadService.never", "true"); // No need to download periodically
+        // TODO Find a way to preload the required plugin data files, since it does have to do initial fetch
+        System.setProperty("hudson.DNSMultiCast.disabled", "true"); // Claimed to be slow
+        System.setProperty("jenkins.install.runSetupWizard", "false"); // Disable Jenkins 2 setup wizard
+        System.setProperty("hudson.udp", "-1");  // Not needed
+        System.setProperty("hudson.model.UsageStatistics.disabled", "true");
+
         server.start();
         Thread.sleep(15000); // TODO call WebAppMain.joinInit so it can handle long startups
 

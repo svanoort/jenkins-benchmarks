@@ -37,7 +37,7 @@ public class Main implements Callable<Run> {
 
     @TearDown(Level.Trial)
     public void teardown() throws Exception {
-        maskedClassesRunner.startup();
+        maskedClassesRunner.shutdown();
     }
 
     @Benchmark
@@ -46,6 +46,16 @@ public class Main implements Callable<Run> {
     }
 
     @Override public Run call() throws Exception {
+        Jenkins j = Jenkins.getInstance();
+        Item it = j.getItemByFullName("p");
+        if (it != null) {
+            it.delete();
+        }
+        it = j.getItemByFullName("p2");
+        if (it != null) {
+            it.delete();
+        }
+
         WorkflowJob p = Jenkins.getInstance().createProject(WorkflowJob.class, "p");
         p.setDefinition(new CpsFlowDefinition("echo 'hello'", true));
         WorkflowRun b = p.scheduleBuild2(0).get();
@@ -55,26 +65,15 @@ public class Main implements Callable<Run> {
         return p.getLastBuild();
     }
 
-    @Setup(Level.Iteration)
+    /*@Setup(Level.Iteration)
     @TearDown(Level.Iteration)
     public void classSafeTeardown() throws Exception {
         // Has to be this way because custom classloading: otherwise we get exception casting hudson to itself
         // This is because they were loaded from different classloaders
         // Also fun point: actualRunnable is type Main_jmh and not Main, so can't cast to Main
         actualRunnable.getClass().getMethod("deleteJobs").invoke(actualRunnable);
-    }
+    }*/
 
-    public void deleteJobs() throws Exception {
-        Hudson j = (Hudson)maskedClassesRunner.getJenkins();
-        Item it = j.getItemByFullName("p");
-        if (it != null) {
-            it.delete();
-        }
-        it = j.getItemByFullName("p2");
-        if (it != null) {
-            it.delete();
-        }
-    }
 
     public static void main(String[] args) throws Exception {
         /*JenkinsMaskedClassesRunner runner = new JenkinsMaskedClassesRunner();
