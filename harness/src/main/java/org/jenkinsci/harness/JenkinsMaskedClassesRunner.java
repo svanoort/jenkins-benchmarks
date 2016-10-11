@@ -12,12 +12,6 @@ import org.eclipse.jetty.security.HashLoginService;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.webapp.WebAppClassLoader;
 import org.eclipse.jetty.webapp.WebAppContext;
-import org.openjdk.jmh.annotations.Benchmark;
-import org.openjdk.jmh.annotations.Level;
-import org.openjdk.jmh.annotations.Scope;
-import org.openjdk.jmh.annotations.Setup;
-import org.openjdk.jmh.annotations.State;
-import org.openjdk.jmh.annotations.TearDown;
 
 
 // Runs Jenkins in an isolated classLoader: note we can't call any Jenkins methods here
@@ -30,6 +24,10 @@ public class JenkinsMaskedClassesRunner {
     ClassLoader testLoader = null;
     Server server = null;
     File jenkinsHome = null;
+
+    public Object getJenkins() {
+        return jenkinsInstance;
+    }
 
     public void startup() throws Exception {
         server = new Server(8080); // TODO bind only to localhost
@@ -130,6 +128,7 @@ public class JenkinsMaskedClassesRunner {
             coreLoader = null;
             jenkinsClass = null;
             jenkinsInstance = null;
+            testLoader = null;
         } catch (Throwable t) {
             t.printStackTrace();
             System.exit(1);
@@ -147,6 +146,35 @@ public class JenkinsMaskedClassesRunner {
         }
         return main;
     }
+
+    /*
+    // Install/updates plugins from update center, saved for future use if needed.
+    public void updatePluginsFromUpdateCenter(List<String> shortPluginNames) throws Exception {
+        PluginManager pm = jenkinsInstance.getPluginManager();
+        if (shortPluginNames.size() > 0) {
+            UpdateCenter up = jenkinsInstance.getUpdateCenter();
+            if (up.getAvailables().size() == 0) {
+                up.updateAllSites();
+            }
+            List<Future<UpdateCenter.UpdateCenterJob>> futures = new ArrayList<Future<UpdateCenter.UpdateCenterJob>>();
+            for (String pluginName : shortPluginNames) {
+                UpdateSite.Plugin plug = jenkinsInstance.getUpdateCenter().getPlugin(pluginName);
+                if (plug.isNewerThan(pm.getPlugin(pluginName).getVersion())) {
+                    plug.deploy(true);
+                }
+                UpdateSite.Plugin p = jenkinsInstance.getUpdateCenter().getPlugin(pluginName);
+                Future<UpdateCenter.UpdateCenterJob> fut = p.deploy(true);
+                futures.add(fut);
+            }
+            // Deployment errors, boo!
+            for (Future<UpdateCenter.UpdateCenterJob> fut : futures) {
+                if (fut.get().getError() != null) {
+                    throw new RunnerException(fut.get().getError());
+                }
+            }
+        }
+    }
+     */
 
     public void runSingle(Class<? extends Callable<?>> callableClass) throws Exception {
         try {

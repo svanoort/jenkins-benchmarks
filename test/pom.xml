@@ -8,6 +8,7 @@
     </parent>
     <artifactId>test</artifactId>
     <packaging>jar</packaging>
+    <description>Jenkins sample benchmark case</description>
     <build>
         <plugins>
             <plugin>
