@@ -12,6 +12,12 @@ import org.eclipse.jetty.security.HashLoginService;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.webapp.WebAppClassLoader;
 import org.eclipse.jetty.webapp.WebAppContext;
+import org.openjdk.jmh.annotations.Benchmark;
+import org.openjdk.jmh.annotations.Level;
+import org.openjdk.jmh.annotations.Scope;
+import org.openjdk.jmh.annotations.Setup;
+import org.openjdk.jmh.annotations.State;
+import org.openjdk.jmh.annotations.TearDown;
 
 
 // Runs Jenkins in an isolated classLoader: note we can't call any Jenkins methods here
@@ -21,10 +27,11 @@ public class JenkinsMaskedClassesRunner {
     Object jenkinsInstance = null;
     ClassLoader coreLoader = null;
     ClassLoader uberClassLoader = null;
+    ClassLoader testLoader = null;
     Server server = null;
     File jenkinsHome = null;
 
-    public void startup(Class<? extends Callable<?>> callableClass) throws Exception {
+    public void startup() throws Exception {
         server = new Server(8080); // TODO bind only to localhost
         WebAppContext webapp = new WebAppContext();
         webapp.setContextPath("/jenkins");
@@ -106,39 +113,47 @@ public class JenkinsMaskedClassesRunner {
 
         // New we can use the uberclassloader which sees all the jenkins plugins too
         uberClassLoader = (ClassLoader) pluginManager.getClass().getField("uberClassLoader").get(pluginManager);
+        testLoader = new URLClassLoader(((URLClassLoader)JenkinsMaskedClassesRunner.class.getClassLoader()).getURLs(), uberClassLoader);
     }
 
-    public void shutdown() throws Exception {
-        if (jenkinsInstance == null) {
-            jenkinsInstance = jenkinsClass.getMethod("getInstance").invoke(null);
+    public void shutdown() {
+        try {
+            if (jenkinsInstance == null) {
+                jenkinsInstance = jenkinsClass.getMethod("getInstance").invoke(null);
+            }
+            jenkinsClass.getMethod("cleanUp").invoke(jenkinsInstance); // TODO need to call getInstance and use the instance method
+            uberClassLoader = null;
+            server.stop();
+            server.join();
+            FileUtils.deleteDirectory(jenkinsHome);
+            server = null;
+            coreLoader = null;
+            jenkinsClass = null;
+            jenkinsInstance = null;
+        } catch (Throwable t) {
+            t.printStackTrace();
+            System.exit(1);
         }
-        jenkinsClass.getMethod("cleanUp").invoke(jenkinsInstance); // TODO need to call getInstance and use the instance method
-        uberClassLoader = null;
-        server.stop();
-        server.join();
-        FileUtils.deleteDirectory(jenkinsHome);
-        server = null;
-        coreLoader = null;
-        jenkinsClass = null;
-        jenkinsInstance = null;
+
     }
 
-    public void runActive(Class<? extends Callable> myclass) {
-        // TODO fire JMH using a preexisting Jenkins class in there?
-        // Somehow inject running/jenkins info into it?  Use the custom classloading here?  If jenkins is running, should see it.
+    public Callable createTestClass(Class<? extends Callable> testClass) throws Exception {
+        if (testLoader == null) {
+            startup();
+        }
+        Callable<Void> main = (Callable) testLoader.loadClass(testClass.getName()).newInstance();
+        if (main.getClass().getClassLoader() != testLoader) {
+            throw new IllegalStateException("wrong loader");
+        }
+        return main;
     }
 
     public void runSingle(Class<? extends Callable<?>> callableClass) throws Exception {
         try {
-            startup(callableClass);
-            ClassLoader testLoader = new URLClassLoader(((URLClassLoader)JenkinsMaskedClassesRunner.class.getClassLoader()).getURLs(), uberClassLoader);
-                    //new URLClassLoader(urls, uberClassLoader);  // Set up classpath which points at classes inside Jenkins
+            startup();
             try {
                 @SuppressWarnings("unchecked")
-                Callable<Void> main = (Callable) testLoader.loadClass(callableClass.getName()).newInstance();
-                if (main.getClass().getClassLoader() != testLoader) {
-                    throw new IllegalStateException("wrong loader");
-                }
+                Callable<Void> main = createTestClass(callableClass);
                 main.call();
             } catch (Throwable t) {
                 t.printStackTrace();
@@ -146,12 +161,7 @@ public class JenkinsMaskedClassesRunner {
         } catch (Throwable t) {
             t.printStackTrace();
         } finally {
-            try {
-                shutdown();
-            } catch (Throwable t) {
-                t.printStackTrace();
-                System.exit(1);
-            }
+            shutdown();
         }
     }
 

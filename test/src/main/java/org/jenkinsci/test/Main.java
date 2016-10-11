@@ -19,8 +19,10 @@ public class Main implements Callable<Void> {
         p2.scheduleBuild2(0).get();
         return null;
     }
+
     public static void main(String[] args) throws Exception {
         JenkinsMaskedClassesRunner runner = new JenkinsMaskedClassesRunner();
         runner.runSingle(Main.class);
+//        runner.runSingleBenchmark(Main.class);
     }
 }
