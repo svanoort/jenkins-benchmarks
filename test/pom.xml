@@ -20,7 +20,7 @@
                 <version>1.120</version>
                 <executions>
                     <execution>
-                        <phase>compile</phase>
+                        <phase>package</phase>
                         <goals>
                             <goal>assemble-dependencies</goal>
                         </goals>
@@ -34,7 +34,18 @@
             <groupId>org.jenkins-ci.plugins.workflow</groupId>
             <artifactId>workflow-aggregator</artifactId>
             <version>2.3</version>
-            <type>hpi</type>
+            <exclusions>
+                <!-- Need to do explicit exclusions for plugins we're customizing version of -->
+                <exclusion>
+                    <groupId>org.jenkins-ci.plugins.pipeline-stage-view</groupId>
+                    <artifactId>pipeline-rest-api</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>org.jenkins-ci.plugins.pipeline-stage-view</groupId>
+            <artifactId>pipeline-rest-api</artifactId>
+            <version>2.1</version>
         </dependency>
         <dependency>
             <groupId>org.jenkins-ci.main</groupId>

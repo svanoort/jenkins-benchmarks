@@ -3,6 +3,7 @@ package org.jenkinsci.test;
 import com.cloudbees.workflow.flownode.FlowNodeUtil;
 import com.cloudbees.workflow.rest.external.RunExt;
 import com.google.common.cache.LoadingCache;
+import hudson.PluginWrapper;
 import hudson.model.Computer;
 import hudson.model.Item;
 import hudson.model.Result;
@@ -36,6 +37,8 @@ import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
@@ -117,6 +120,7 @@ public class StageViewBenchmark extends BaseBenchmark  {
 
     public void setup() throws Exception {
         super.setup();
+        this.actualRunnable.getClass().getMethod("printVersions").invoke(actualRunnable);
         benchmarkExecutionMethod = actualRunnable.getClass().getMethod("benchmarkStageView");
     }
 
@@ -192,6 +196,22 @@ public class StageViewBenchmark extends BaseBenchmark  {
         } catch (Exception ex) {
             ex.printStackTrace();
         }
+    }
+
+    /** Print jenkins & plugin names and versions */
+    public void printVersions() {
+        System.out.println("Jenkins version: "+Jenkins.getVersion().toString());
+        List<PluginWrapper> plugins = Jenkins.getInstance().getPluginManager().getPlugins();
+        Collections.sort(plugins);
+        for(PluginWrapper pw : plugins) {
+            System.out.println(pw.getShortName()+":"+pw.getVersion());
+        }
+
+    }
+
+    public void teardown() throws Exception {
+        this.actualRunnable.getClass().getMethod("printVersions").invoke(actualRunnable);
+        super.teardown();
     }
 
     @Override
