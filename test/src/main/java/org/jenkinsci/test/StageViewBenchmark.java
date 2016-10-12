@@ -146,9 +146,10 @@ public class StageViewBenchmark extends BaseBenchmark  {
                     "    stage \"stage $i\" \n" +
                     "    echo \"ran my stage is $i\"        \n" +
                     "    node {\n" +
-                    "        sh 'whoami';\n" +
+                    "        echo 'whoami';\n" +
                     "    }\n" +
                     "}\n" +
+                    "node {sh'whoami';} \n"+
                     "\n" +
                     "stage 'label based'\n" +
                     "echo 'wait for executor'\n" +
@@ -161,7 +162,7 @@ public class StageViewBenchmark extends BaseBenchmark  {
             for (int i=0; i<10; i++) {  // These will run in parallel
                 WorkflowRun run = p.scheduleBuild2(0).get();
                 while (run.getExecution() == null || !run.getExecution().isComplete()) {
-                    Thread.sleep(10);
+                    Thread.sleep(50);
                 }
             }
 
@@ -222,14 +223,12 @@ public class StageViewBenchmark extends BaseBenchmark  {
                 // You can be more specific if you'd like to run only one benchmark per test.
                 .include(StageViewBenchmark.class.getName() + ".*")
                 // Set the following options as needed
-                .mode (Mode.SingleShotTime)
+                .mode (Mode.AverageTime)
                 .timeUnit(TimeUnit.MILLISECONDS)
                 .warmupIterations(1)
-                .warmupBatchSize(5)
-//                .warmupTime(TimeValue.seconds(30))
+                .warmupTime(TimeValue.seconds(300))
                 .measurementIterations(5)
-                .measurementBatchSize(5)
-//                .measurementTime(TimeValue.seconds(30))
+                .measurementTime(TimeValue.seconds(60))
                 .threads(1)
                 .forks(1)
                 .shouldFailOnError(true)
