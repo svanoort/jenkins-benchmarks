@@ -29,6 +29,10 @@ public class JenkinsMaskedClassesRunner {
         return jenkinsInstance;
     }
 
+    public ClassLoader getTestLoader() {
+        return testLoader;
+    }
+
     public void startup() throws Exception {
         server = new Server(8080); // TODO bind only to localhost
         WebAppContext webapp = new WebAppContext();
@@ -63,7 +67,6 @@ public class JenkinsMaskedClassesRunner {
         realm.setName("default");
         //        realm.update("alice", new Password("alice"), new String[]{"user","female"});
         webapp.getSecurityHandler().setLoginService(realm);
-        // TODO Failed to load class "org.slf4j.impl.StaticLoggerBinder".
         // Just load things from the test classpath which are in fact from Jetty, or from the Java platform.
         // Masker may need to load Hamcrest, etc which are used in testing but not part of jenkins
         ClassLoader masker = new ClassLoader(JenkinsMaskedClassesRunner.class.getClassLoader()) {
@@ -71,7 +74,7 @@ public class JenkinsMaskedClassesRunner {
 
             @Override
             protected Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {
-                if (name.matches("(org[.]eclipse[.]jetty|javax[.]servlet)[.].+")) {
+                if (name.matches("(org[.]eclipse[.]jetty|javax[.]servlet|org[.]jenkinsci[.]harness|org[.]openjdk[.]jmh)[.].+")) {
                     return super.loadClass(name, resolve);
                 } else {
                     return javaLoader.loadClass(name);
@@ -80,7 +83,7 @@ public class JenkinsMaskedClassesRunner {
 
             @Override
             public URL getResource(String name) {
-                if (name.matches("(org/eclipse/jetty|javax/servlet)/.+")) {
+                if (name.matches("(org/eclipse/jetty|javax/servlet|org/jenkinsci/harness|org/openjdk/jmh)/.+")) {
                     return super.getResource(name);
                 } else {
                     return javaLoader.getResource(name);
@@ -89,7 +92,7 @@ public class JenkinsMaskedClassesRunner {
 
             @Override
             public Enumeration<URL> getResources(String name) throws IOException {
-                if (name.matches("(org/eclipse/jetty|javax/servlet)/.+")) {
+                if (name.matches("(org/eclipse/jetty|javax/servlet|org/jenkinsci/harness|org/openjdk/jmh)/.+")) {
                     return super.getResources(name);
                 } else {
                     return javaLoader.getResources(name);
@@ -128,7 +131,7 @@ public class JenkinsMaskedClassesRunner {
             if (jenkinsInstance == null) {
                 jenkinsInstance = jenkinsClass.getMethod("getInstance").invoke(null);
             }
-            jenkinsClass.getMethod("cleanUp").invoke(jenkinsInstance); // TODO need to call getInstance and use the instance method
+            jenkinsClass.getMethod("cleanUp").invoke(jenkinsInstance);
             uberClassLoader = null;
             server.stop();
             server.join();
