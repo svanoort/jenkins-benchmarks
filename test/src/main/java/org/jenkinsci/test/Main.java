@@ -18,6 +18,10 @@ import org.openjdk.jmh.runner.options.TimeValue;
 
 public class Main extends SingletonBenchmark<Run>  {
 
+    public Class getTestClass() {
+        return Main.class;
+    }
+
     @Override public Run call() throws Exception {
         WorkflowJob p = Jenkins.getInstance().createProject(WorkflowJob.class, "p");
         p.setDefinition(new CpsFlowDefinition("echo 'hello'", true));

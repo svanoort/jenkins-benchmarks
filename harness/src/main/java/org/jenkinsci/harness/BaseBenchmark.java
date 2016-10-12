@@ -10,17 +10,18 @@ import org.openjdk.jmh.annotations.TearDown;
  * Extend me to create a basic jenkins benchmark, and create benchmark-annotated methods
  */
 @State(Scope.Benchmark)
-public abstract class BaseBenchmark<B extends BaseBenchmark> {
+public abstract class BaseBenchmark {
     public JenkinsMaskedClassesRunner maskedClassesRunner = new JenkinsMaskedClassesRunner();
-    public B actualRunnable;
+    public BaseBenchmark actualRunnable;
 
+    public abstract Class<? extends BaseBenchmark> getTestClass();
 
     @Setup(Level.Trial)
     public void setup() throws Exception {
         maskedClassesRunner.startup();
-        Class c = maskedClassesRunner.testLoader.loadClass(this.getClass().getName());
+        Class c = maskedClassesRunner.testLoader.loadClass(getTestClass().getName());
         Object o = c.newInstance();
-        actualRunnable = (B)(o);
+        actualRunnable = (BaseBenchmark) (o);
     }
 
     @TearDown(Level.Trial)

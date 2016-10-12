@@ -8,12 +8,19 @@ import java.util.concurrent.Callable;
 
 /** Extend this and implement the call<Type> method to create a benchmark class that runs the call as a benchmark */
 @State(Scope.Benchmark)
-public abstract class SingletonBenchmark<T> extends BaseBenchmark<SingletonBenchmark> implements Callable<T> {
+public abstract class SingletonBenchmark<T> extends BaseBenchmark implements Callable<T> {
+
+    Callable<T> superRunnable;
+
+    public void setup() throws Exception {
+        super.setup();
+        this.superRunnable = (SingletonBenchmark)this.actualRunnable;
+    }
 
     @Benchmark
     public T benchmark() throws Exception {
         try {
-            return (T)(actualRunnable.call());
+            return (T)(superRunnable.call());
         } catch (Exception ex) {
             throw ex;
         }
