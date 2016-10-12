@@ -29,11 +29,6 @@ public class Main extends SingletonBenchmark<Run>  {
     }
 
     @Override
-    public Class getTestClass() {
-        return Main.class;
-    }
-
-    @Override
     public void setupInvocation() {
         deleteProjects();
     }
@@ -85,12 +80,5 @@ public class Main extends SingletonBenchmark<Run>  {
         } finally {
             System.exit(0);
         }
-
-        /*Main m = new Main();
-        m.setup();
-        m.setupInvocationInvoker();
-        m.benchmark();
-        m.tearDownInvocationInvoker();
-        m.teardown();*/
     }
 }
