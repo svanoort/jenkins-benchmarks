@@ -40,12 +40,24 @@
                     <groupId>org.jenkins-ci.plugins.pipeline-stage-view</groupId>
                     <artifactId>pipeline-rest-api</artifactId>
                 </exclusion>
+                <exclusion>
+                    <groupId>org.jenkins-ci.plugins</groupId>
+                    <artifactId>pipeline-graph-analysis</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.jenkins-ci.plugins</groupId>
+                    <artifactId>pipeline-graph-analysis</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.jenkins-ci.plugins.workflow</groupId>
+                    <artifactId>workflow-api</artifactId>
+                </exclusion>
             </exclusions>
         </dependency>
         <dependency>
             <groupId>org.jenkins-ci.plugins.pipeline-stage-view</groupId>
             <artifactId>pipeline-rest-api</artifactId>
-            <version>2.1</version>
+            <version>2.2-optimized-SNAPSHOT</version>
         </dependency>
         <dependency>
             <groupId>org.jenkins-ci.main</groupId>
