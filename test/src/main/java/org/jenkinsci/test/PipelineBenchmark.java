@@ -23,6 +23,7 @@ public class PipelineBenchmark extends BaseBenchmark  {
 
     @Benchmark
     public Object runPipelineBenchmark() throws Exception {
+        // We can't cast the actualRunnable to anything that isn't in the main harness package due to custom classloading
         return benchmarkExecutionMethod.invoke(actualRunnable);
     }
 
@@ -44,7 +45,7 @@ public class PipelineBenchmark extends BaseBenchmark  {
 
     public void setup() throws Exception {
         super.setup();
-        benchmarkExecutionMethod = actualRunnable.getClass().getMethod("runPipeline");
+        benchmarkExecutionMethod = actualRunnable.getClass().getMethod("benchmarkStageView");
     }
 
     @Override
@@ -111,7 +112,7 @@ public class PipelineBenchmark extends BaseBenchmark  {
                 .timeUnit(TimeUnit.SECONDS)
                 .warmupTime(TimeValue.seconds(300))
                 .warmupIterations(1)
-                .measurementBatchSize(100)
+                .measurementTime(TimeValue.seconds(60))
                 .measurementIterations(3)
                 .threads(1)
                 .forks(1)

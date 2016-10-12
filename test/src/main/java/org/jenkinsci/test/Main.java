@@ -68,9 +68,9 @@ public class Main extends SingletonBenchmark<Run>  {
                 // Set the following options as needed
                 .mode (Mode.AverageTime)
                 .timeUnit(TimeUnit.MICROSECONDS)
-                .warmupTime(TimeValue.seconds(30))
+                .warmupTime(TimeValue.seconds(300))
                 .warmupIterations(1)
-                .measurementTime(TimeValue.seconds(30))
+                .measurementTime(TimeValue.seconds(120))
                 .measurementIterations(3)
                 .threads(1)
                 .forks(1)
