@@ -2,12 +2,14 @@ package org.jenkinsci.harness;
 
 import java.io.File;
 import java.io.IOException;
+import java.net.InetSocketAddress;
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.nio.file.Files;
 import java.util.Enumeration;
 import java.util.concurrent.Callable;
 import org.apache.commons.io.FileUtils;
+import org.apache.commons.io.IOUtils;
 import org.eclipse.jetty.security.HashLoginService;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.webapp.WebAppClassLoader;
@@ -34,7 +36,7 @@ public class JenkinsMaskedClassesRunner {
     }
 
     public void startup() throws Exception {
-        server = new Server(8080); // TODO bind only to localhost
+        server = new Server(new InetSocketAddress("127.0.0.1", 8080));  // Security: bind only to connections from localhost
         WebAppContext webapp = new WebAppContext();
         webapp.setContextPath("/jenkins");
         jenkinsHome = File.createTempFile("jenkinsHome", ".tmp");
@@ -106,7 +108,7 @@ public class JenkinsMaskedClassesRunner {
         System.setProperty("hudson.Main.development", "true");
         System.setProperty("hudson.model.UpdateCenter.never", "true"); // Checking for updates is slow & not needed when we prepopulate plugins
         System.setProperty("hudson.model.DownloadService.never", "true"); // No need to download periodically
-        // TODO Find a way to preload the required plugin data files, since it does have to do initial fetch
+        // TODO Find a way to preload the required plugin data files, since it does have to do initial fetch and is very hard to bypass
         System.setProperty("hudson.DNSMultiCast.disabled", "true"); // Claimed to be slow
         System.setProperty("jenkins.install.runSetupWizard", "false"); // Disable Jenkins 2 setup wizard
         System.setProperty("hudson.udp", "-1");  // Not needed
