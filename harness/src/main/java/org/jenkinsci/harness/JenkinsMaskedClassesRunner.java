@@ -2,12 +2,14 @@ package org.jenkinsci.harness;
 
 import java.io.File;
 import java.io.IOException;
+import java.net.InetSocketAddress;
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.nio.file.Files;
 import java.util.Enumeration;
 import java.util.concurrent.Callable;
 import org.apache.commons.io.FileUtils;
+import org.apache.commons.io.IOUtils;
 import org.eclipse.jetty.security.HashLoginService;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.webapp.WebAppClassLoader;
@@ -21,11 +23,20 @@ public class JenkinsMaskedClassesRunner {
     Object jenkinsInstance = null;
     ClassLoader coreLoader = null;
     ClassLoader uberClassLoader = null;
+    ClassLoader testLoader = null;
     Server server = null;
     File jenkinsHome = null;
 
-    public void startup(Class<? extends Callable<?>> callableClass) throws Exception {
-        server = new Server(8080); // TODO bind only to localhost
+    public Object getJenkins() {
+        return jenkinsInstance;
+    }
+
+    public ClassLoader getTestLoader() {
+        return testLoader;
+    }
+
+    public void startup() throws Exception {
+        server = new Server(new InetSocketAddress("127.0.0.1", 8080));  // Security: bind only to connections from localhost
         WebAppContext webapp = new WebAppContext();
         webapp.setContextPath("/jenkins");
         jenkinsHome = File.createTempFile("jenkinsHome", ".tmp");
@@ -58,7 +69,6 @@ public class JenkinsMaskedClassesRunner {
         realm.setName("default");
         //        realm.update("alice", new Password("alice"), new String[]{"user","female"});
         webapp.getSecurityHandler().setLoginService(realm);
-        // TODO Failed to load class "org.slf4j.impl.StaticLoggerBinder".
         // Just load things from the test classpath which are in fact from Jetty, or from the Java platform.
         // Masker may need to load Hamcrest, etc which are used in testing but not part of jenkins
         ClassLoader masker = new ClassLoader(JenkinsMaskedClassesRunner.class.getClassLoader()) {
@@ -66,7 +76,7 @@ public class JenkinsMaskedClassesRunner {
 
             @Override
             protected Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {
-                if (name.matches("(org[.]eclipse[.]jetty|javax[.]servlet)[.].+")) {
+                if (name.matches("(org[.]eclipse[.]jetty|javax[.]servlet|org[.]jenkinsci[.]harness|org[.]openjdk[.]jmh)[.].+")) {
                     return super.loadClass(name, resolve);
                 } else {
                     return javaLoader.loadClass(name);
@@ -75,7 +85,7 @@ public class JenkinsMaskedClassesRunner {
 
             @Override
             public URL getResource(String name) {
-                if (name.matches("(org/eclipse/jetty|javax/servlet)/.+")) {
+                if (name.matches("(org/eclipse/jetty|javax/servlet|org/jenkinsci/harness|org/openjdk/jmh)/.+")) {
                     return super.getResource(name);
                 } else {
                     return javaLoader.getResource(name);
@@ -84,7 +94,7 @@ public class JenkinsMaskedClassesRunner {
 
             @Override
             public Enumeration<URL> getResources(String name) throws IOException {
-                if (name.matches("(org/eclipse/jetty|javax/servlet)/.+")) {
+                if (name.matches("(org/eclipse/jetty|javax/servlet|org/jenkinsci/harness|org/openjdk/jmh)/.+")) {
                     return super.getResources(name);
                 } else {
                     return javaLoader.getResources(name);
@@ -93,8 +103,17 @@ public class JenkinsMaskedClassesRunner {
         };
         // Startup without polluting the webapp with test classes
         webapp.setClassLoader(new WebAppClassLoader(masker, webapp));
+
+        // Startup fixes & optimizations, goes from 19 seconds from doStart to 15 sec (just thread sleep)
         System.setProperty("hudson.Main.development", "true");
-        System.setProperty("jenkins.install.runSetupWizard", "false");
+        System.setProperty("hudson.model.UpdateCenter.never", "true"); // Checking for updates is slow & not needed when we prepopulate plugins
+        System.setProperty("hudson.model.DownloadService.never", "true"); // No need to download periodically
+        // TODO Find a way to preload the required plugin data files, since it does have to do initial fetch and is very hard to bypass
+        System.setProperty("hudson.DNSMultiCast.disabled", "true"); // Claimed to be slow
+        System.setProperty("jenkins.install.runSetupWizard", "false"); // Disable Jenkins 2 setup wizard
+        System.setProperty("hudson.udp", "-1");  // Not needed
+        System.setProperty("hudson.model.UsageStatistics.disabled", "true");
+
         server.start();
         Thread.sleep(15000); // TODO call WebAppMain.joinInit so it can handle long startups
 
@@ -106,39 +125,77 @@ public class JenkinsMaskedClassesRunner {
 
         // New we can use the uberclassloader which sees all the jenkins plugins too
         uberClassLoader = (ClassLoader) pluginManager.getClass().getField("uberClassLoader").get(pluginManager);
+        testLoader = new URLClassLoader(((URLClassLoader)JenkinsMaskedClassesRunner.class.getClassLoader()).getURLs(), uberClassLoader);
     }
 
-    public void shutdown() throws Exception {
-        if (jenkinsInstance == null) {
-            jenkinsInstance = jenkinsClass.getMethod("getInstance").invoke(null);
+    public void shutdown() {
+        try {
+            if (jenkinsInstance == null) {
+                jenkinsInstance = jenkinsClass.getMethod("getInstance").invoke(null);
+            }
+            jenkinsClass.getMethod("cleanUp").invoke(jenkinsInstance);
+            uberClassLoader = null;
+            server.stop();
+            server.join();
+            FileUtils.deleteDirectory(jenkinsHome);
+            server = null;
+            coreLoader = null;
+            jenkinsClass = null;
+            jenkinsInstance = null;
+            testLoader = null;
+        } catch (Throwable t) {
+            t.printStackTrace();
+            System.exit(1);
         }
-        jenkinsClass.getMethod("cleanUp").invoke(jenkinsInstance); // TODO need to call getInstance and use the instance method
-        uberClassLoader = null;
-        server.stop();
-        server.join();
-        FileUtils.deleteDirectory(jenkinsHome);
-        server = null;
-        coreLoader = null;
-        jenkinsClass = null;
-        jenkinsInstance = null;
+
     }
 
-    public void runActive(Class<? extends Callable> myclass) {
-        // TODO fire JMH using a preexisting Jenkins class in there?
-        // Somehow inject running/jenkins info into it?  Use the custom classloading here?  If jenkins is running, should see it.
+    public Callable createTestClass(Class<? extends Callable> testClass) throws Exception {
+        if (testLoader == null) {
+            startup();
+        }
+        Callable<Void> main = (Callable) testLoader.loadClass(testClass.getName()).newInstance();
+        if (main.getClass().getClassLoader() != testLoader) {
+            throw new IllegalStateException("wrong loader");
+        }
+        return main;
     }
+
+    /*
+    // Install/updates plugins from update center, saved for future use if needed.
+    public void updatePluginsFromUpdateCenter(List<String> shortPluginNames) throws Exception {
+        PluginManager pm = jenkinsInstance.getPluginManager();
+        if (shortPluginNames.size() > 0) {
+            UpdateCenter up = jenkinsInstance.getUpdateCenter();
+            if (up.getAvailables().size() == 0) {
+                up.updateAllSites();
+            }
+            List<Future<UpdateCenter.UpdateCenterJob>> futures = new ArrayList<Future<UpdateCenter.UpdateCenterJob>>();
+            for (String pluginName : shortPluginNames) {
+                UpdateSite.Plugin plug = jenkinsInstance.getUpdateCenter().getPlugin(pluginName);
+                if (plug.isNewerThan(pm.getPlugin(pluginName).getVersion())) {
+                    plug.deploy(true);
+                }
+                UpdateSite.Plugin p = jenkinsInstance.getUpdateCenter().getPlugin(pluginName);
+                Future<UpdateCenter.UpdateCenterJob> fut = p.deploy(true);
+                futures.add(fut);
+            }
+            // Deployment errors, boo!
+            for (Future<UpdateCenter.UpdateCenterJob> fut : futures) {
+                if (fut.get().getError() != null) {
+                    throw new RunnerException(fut.get().getError());
+                }
+            }
+        }
+    }
+     */
 
     public void runSingle(Class<? extends Callable<?>> callableClass) throws Exception {
         try {
-            startup(callableClass);
-            ClassLoader testLoader = new URLClassLoader(((URLClassLoader)JenkinsMaskedClassesRunner.class.getClassLoader()).getURLs(), uberClassLoader);
-                    //new URLClassLoader(urls, uberClassLoader);  // Set up classpath which points at classes inside Jenkins
+            startup();
             try {
                 @SuppressWarnings("unchecked")
-                Callable<Void> main = (Callable) testLoader.loadClass(callableClass.getName()).newInstance();
-                if (main.getClass().getClassLoader() != testLoader) {
-                    throw new IllegalStateException("wrong loader");
-                }
+                Callable<Void> main = createTestClass(callableClass);
                 main.call();
             } catch (Throwable t) {
                 t.printStackTrace();
@@ -146,12 +203,7 @@ public class JenkinsMaskedClassesRunner {
         } catch (Throwable t) {
             t.printStackTrace();
         } finally {
-            try {
-                shutdown();
-            } catch (Throwable t) {
-                t.printStackTrace();
-                System.exit(1);
-            }
+            shutdown();
         }
     }
 

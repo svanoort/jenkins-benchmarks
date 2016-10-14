@@ -8,6 +8,7 @@
     </parent>
     <artifactId>test</artifactId>
     <packaging>jar</packaging>
+    <description>Jenkins sample benchmark case</description>
     <build>
         <plugins>
             <plugin>
@@ -19,7 +20,7 @@
                 <version>1.120</version>
                 <executions>
                     <execution>
-                        <phase>compile</phase>
+                        <phase>package</phase>
                         <goals>
                             <goal>assemble-dependencies</goal>
                         </goals>
@@ -33,7 +34,54 @@
             <groupId>org.jenkins-ci.plugins.workflow</groupId>
             <artifactId>workflow-aggregator</artifactId>
             <version>2.3</version>
-            <type>hpi</type>
+            <exclusions>
+                <!-- Need to do explicit exclusions for plugins we're customizing version of -->
+                <exclusion>
+                    <groupId>org.jenkins-ci.plugins.pipeline-stage-view</groupId>
+                    <artifactId>pipeline-rest-api</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.jenkins-ci.plugins</groupId>
+                    <artifactId>pipeline-graph-analysis</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.jenkins-ci.plugins</groupId>
+                    <artifactId>pipeline-graph-analysis</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.jenkins-ci.plugins.workflow</groupId>
+                    <artifactId>workflow-api</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.jenkins-ci.plugins.workflow</groupId>
+                    <artifactId>workflow-support</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>org.jenkins-ci.plugins.pipeline-stage-view</groupId>
+            <artifactId>pipeline-rest-api</artifactId>
+            <version>2.1</version>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.jenkins-ci.plugins.workflow</groupId>
+                    <artifactId>workflow-api</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.jenkins-ci.plugins.workflow</groupId>
+                    <artifactId>workflow-support</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>org.jenkins-ci.plugins.workflow</groupId>
+            <artifactId>workflow-api</artifactId>
+            <version>2.5-optimized3-SNAPSHOT</version>
+        </dependency>
+        <dependency>
+            <groupId>org.jenkins-ci.plugins.workflow</groupId>
+            <artifactId>workflow-support</artifactId>
+            <version>2.9-optimized2-SNAPSHOT</version>
         </dependency>
         <dependency>
             <groupId>org.jenkins-ci.main</groupId>
