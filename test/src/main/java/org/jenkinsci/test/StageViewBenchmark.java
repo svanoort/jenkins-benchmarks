@@ -24,6 +24,7 @@ import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.Level;
 import org.openjdk.jmh.annotations.Mode;
 import org.openjdk.jmh.annotations.Setup;
+import org.openjdk.jmh.profile.StackProfiler;
 import org.openjdk.jmh.runner.Runner;
 import org.openjdk.jmh.runner.options.Options;
 import org.openjdk.jmh.runner.options.OptionsBuilder;
@@ -92,7 +93,8 @@ public class StageViewBenchmark extends BaseBenchmark  {
 
     public Object benchmarkStageView() throws Exception {
         // Full HTTP request issuing
-        GetMethod method = new GetMethod("http://localhost:8080/jenkins/job/benchmarkPipeline/wfapi/runs?fullStages=true");
+        GetMethod method = new GetMethod("http://127.0.0.1:8080/jenkins/job/benchmarkPipeline/wfapi/runs?fullStages=true");
+//        GetMethod method = new GetMethod("http://localhost:8080/jenkins/job/benchmarkPipeline/wfapi/runs");
         client.executeMethod(method);
         InputStream strm = new BufferedInputStream(method.getResponseBodyAsStream());
         return new Integer(readAndCount(strm));
@@ -225,7 +227,7 @@ public class StageViewBenchmark extends BaseBenchmark  {
         try {
             bench.setup();
             bench.setupInvocationInvoker();
-            bench.stageViewBenchmark();
+            bench.stageViewBenchmark().toString();
             bench.tearDownInvocationInvoker();
             bench.teardown();
         } catch (Exception ex) {
@@ -251,6 +253,8 @@ public class StageViewBenchmark extends BaseBenchmark  {
                 .measurementTime(TimeValue.seconds(60))
                 .threads(1)
                 .forks(1)
+//                .addProfiler(StackProfiler.class)
+//                .jvmArgsAppend("-Djmh.stack.lines=5")
                 .shouldFailOnError(true)
                 .shouldDoGC(true)
                 .build();
