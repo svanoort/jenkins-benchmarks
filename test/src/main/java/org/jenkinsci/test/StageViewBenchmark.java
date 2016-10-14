@@ -46,6 +46,7 @@ import java.util.concurrent.TimeUnit;
 public class StageViewBenchmark extends BaseBenchmark  {
     Method benchmarkExecutionMethod;
     HttpClient client = new HttpClient();
+    GetMethod method = new GetMethod("http://127.0.0.1:8080/jenkins/job/benchmarkPipeline/wfapi/runs?fullStages=true");
 
     @Benchmark
     public Object stageViewBenchmark() throws Exception {
@@ -93,7 +94,7 @@ public class StageViewBenchmark extends BaseBenchmark  {
 
     public Object benchmarkStageView() throws Exception {
         // Full HTTP request issuing
-        GetMethod method = new GetMethod("http://127.0.0.1:8080/jenkins/job/benchmarkPipeline/wfapi/runs?fullStages=true");
+
 //        GetMethod method = new GetMethod("http://localhost:8080/jenkins/job/benchmarkPipeline/wfapi/runs");
         client.executeMethod(method);
         InputStream strm = new BufferedInputStream(method.getResponseBodyAsStream());
@@ -249,7 +250,7 @@ public class StageViewBenchmark extends BaseBenchmark  {
                 .timeUnit(TimeUnit.MILLISECONDS)
                 .warmupIterations(1)
                 .warmupTime(TimeValue.seconds(300))
-                .measurementIterations(5)
+                .measurementIterations(7)
                 .measurementTime(TimeValue.seconds(60))
                 .threads(1)
                 .forks(1)
