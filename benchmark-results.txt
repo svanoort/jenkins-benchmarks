@@ -1,0 +1,79 @@
+PersistentAction based API
+
+37ba27ede0c7470549a067d2496beff75432b0a4
+
+Result "stageViewBenchmark":
+  19.269 ±(99.9%) 3.665 ms/op [Average]
+  (min, avg, max) = (17.945, 19.269, 22.066), stdev = 1.627
+  CI (99.9%): [15.603, 22.934] (assumes normal distribution)
+
+
+# Run complete. Total time: 00:13:49
+
+Benchmark                              Mode  Cnt   Score   Error  Units
+StageViewBenchmark.stageViewBenchmark  avgt    7  19.269 ± 3.665  ms/op
+
+Process finished with exit code 0
+
+-- using base 2.4 workflow-api (retesting):
+~ 30 ms/op
+
+Result "stageViewBenchmark":
+  30.641 ±(99.9%) 4.871 ms/op [Average]
+  (min, avg, max) = (28.726, 30.641, 34.850), stdev = 2.163
+  CI (99.9%): [25.770, 35.511] (assumes normal distribution)
+
+
+# Run complete. Total time: 00:13:38
+
+Benchmark                              Mode  Cnt   Score   Error  Units
+StageViewBenchmark.stageViewBenchmark  avgt    7  30.641 ± 4.871  ms/op
+
+Process finished with exit code 0
+
+# OPTIMIZED with wrapper list class collapsed back into getActions()
+Hash: a029311937ea09fc97991ad49ba6ced18a88f1e6
+
+Result "stageViewBenchmark":
+  18.811 ±(99.9%) 2.921 ms/op [Average]
+  (min, avg, max) = (17.079, 18.811, 20.860), stdev = 1.297
+  CI (99.9%): [15.890, 21.732] (assumes normal distribution)
+
+
+# Run complete. Total time: 00:12:44
+
+Benchmark                              Mode  Cnt   Score   Error  Units
+StageViewBenchmark.stageViewBenchmark  avgt    7  18.811 ± 2.921  ms/op
+
+Process finished with exit code 0
+
+# OPTIMIZED TO ALLOW FOR INLINING SOME OF THE GETACTION LOGIC:
+workflow-api:2.5-optimized3-SNAPSHOT (private-f1c12e36-svanoort)
+f1c12e366e2d9315828b7fb81448e0e96ed14d14
+
+Result "stageViewBenchmark":
+  17.506 ±(99.9%) 2.353 ms/op [Average]
+  (min, avg, max) = (16.175, 17.506, 18.916), stdev = 1.045
+  CI (99.9%): [15.153, 19.859] (assumes normal distribution)
+
+
+# Run complete. Total time: 00:14:20
+
+Benchmark                              Mode  Cnt   Score   Error  Units
+StageViewBenchmark.stageViewBenchmark  avgt    7  17.506 ± 2.353  ms/op
+
+
+# Publicized getDirectAction calls used just within workflow-api, hash e9c8b47d9a86dc8b1459c48b8fa4d734e1cdd87c
+
+Result "stageViewBenchmark":
+  12.725 ±(99.9%) 3.925 ms/op [Average]
+  (min, avg, max) = (11.014, 12.725, 16.276), stdev = 1.743
+  CI (99.9%): [8.800, 16.651] (assumes normal distribution)
+
+
+# Run complete. Total time: 00:14:01
+
+Benchmark                              Mode  Cnt   Score   Error  Units
+StageViewBenchmark.stageViewBenchmark  avgt    7  12.725 ± 3.925  ms/op
+
+Process finished with exit code 0

@@ -1,22 +1,16 @@
 package org.jenkinsci.test;
 
 import com.cloudbees.workflow.flownode.FlowNodeUtil;
-import com.cloudbees.workflow.rest.external.RunExt;
 import com.google.common.cache.LoadingCache;
 import hudson.PluginWrapper;
 import hudson.model.Computer;
 import hudson.model.Item;
-import hudson.model.Result;
-import hudson.model.queue.QueueTaskFuture;
 import jenkins.model.Jenkins;
-import org.apache.commons.compress.utils.IOUtils;
 import org.apache.commons.httpclient.HttpClient;
 import org.apache.commons.httpclient.methods.GetMethod;
 import org.jenkinsci.harness.BaseBenchmark;
 import org.jenkinsci.plugins.workflow.cps.CpsFlowDefinition;
 import org.jenkinsci.plugins.workflow.cps.CpsFlowExecution;
-import org.jenkinsci.plugins.workflow.flow.FlowExecution;
-import org.jenkinsci.plugins.workflow.graph.FlowNode;
 import org.jenkinsci.plugins.workflow.job.WorkflowJob;
 import org.jenkinsci.plugins.workflow.job.WorkflowRun;
 import org.jenkinsci.plugins.workflow.support.storage.SimpleXStreamFlowNodeStorage;
@@ -24,12 +18,10 @@ import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.Level;
 import org.openjdk.jmh.annotations.Mode;
 import org.openjdk.jmh.annotations.Setup;
-import org.openjdk.jmh.profile.StackProfiler;
 import org.openjdk.jmh.runner.Runner;
 import org.openjdk.jmh.runner.options.Options;
 import org.openjdk.jmh.runner.options.OptionsBuilder;
 import org.openjdk.jmh.runner.options.TimeValue;
-import org.openjdk.jmh.runner.options.WarmupMode;
 
 import java.io.BufferedInputStream;
 import java.io.IOException;
@@ -37,10 +29,8 @@ import java.io.InputStream;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
 public class StageViewBenchmark extends BaseBenchmark  {

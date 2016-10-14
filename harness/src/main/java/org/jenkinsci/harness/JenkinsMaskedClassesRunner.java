@@ -69,7 +69,7 @@ public class JenkinsMaskedClassesRunner {
         realm.setName("default");
         //        realm.update("alice", new Password("alice"), new String[]{"user","female"});
         webapp.getSecurityHandler().setLoginService(realm);
-        // Just load things from the test classpath which are in fact from Jetty, or from the Java platform.
+        // Just load things from the test classpath which are in fact from Jetty, JMH, or from the Java platform.
         // Masker may need to load Hamcrest, etc which are used in testing but not part of jenkins
         ClassLoader masker = new ClassLoader(JenkinsMaskedClassesRunner.class.getClassLoader()) {
             final ClassLoader javaLoader = getParent().getParent();
