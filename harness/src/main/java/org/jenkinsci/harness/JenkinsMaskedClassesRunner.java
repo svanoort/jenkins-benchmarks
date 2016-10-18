@@ -108,14 +108,37 @@ public class JenkinsMaskedClassesRunner {
         System.setProperty("hudson.Main.development", "true");
         System.setProperty("hudson.model.UpdateCenter.never", "true"); // Checking for updates is slow & not needed when we prepopulate plugins
         System.setProperty("hudson.model.DownloadService.never", "true"); // No need to download periodically
-        // TODO Find a way to preload the required plugin data files, since it does have to do initial fetch and is very hard to bypass
+        // TODO Find a way to preload the required plugin data files, since it does do the initial fetch and is very hard to bypass
         System.setProperty("hudson.DNSMultiCast.disabled", "true"); // Claimed to be slow
         System.setProperty("jenkins.install.runSetupWizard", "false"); // Disable Jenkins 2 setup wizard
         System.setProperty("hudson.udp", "-1");  // Not needed
         System.setProperty("hudson.model.UsageStatistics.disabled", "true");
 
         server.start();
-        Thread.sleep(15000); // TODO call WebAppMain.joinInit so it can handle long startups
+
+        // Find the initialization thread from the Jenkins WebAppMain and wait for it to finish before proceeding
+        // A bit hacky, but you need to be able to obtain the actual WebAppMain instance to call joinInit on it
+        for (Thread t : Thread.getAllStackTraces().keySet()) {
+            if (t.getName().contains("Jenkins initialization thread")) {
+                System.out.println("Joining on: "+t.getName());
+                try {
+                    long start = System.currentTimeMillis();
+                    t.join(30000);
+                    long end = System.currentTimeMillis();
+                    System.out.println("Jenkins internals started in "+(end-start)+ " ms");
+                } catch (InterruptedException ie) {
+                    System.out.println("Jenkins failed to initialize within timeout, aborting!");
+                    try {
+                        shutdown();
+                    } catch (Exception ex) {
+                        ex.printStackTrace();
+                        System.out.println("Jenkins failed to shutdown cleanly, taking the nuclear option and exiting the JVM!");
+                        System.exit(1);
+                    }
+                }
+                break;
+            }
+        }
 
         // Gets the classloader for jenkins itself without plugins
         coreLoader = webapp.getClassLoader();
