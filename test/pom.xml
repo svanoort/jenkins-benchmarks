@@ -59,26 +59,26 @@
             <artifactId>pipeline-rest-api</artifactId>
             <version>2.1</version>
             <exclusions>
-                <!--<exclusion>
+                <exclusion>
                     <groupId>org.jenkins-ci.plugins.workflow</groupId>
                     <artifactId>workflow-api</artifactId>
                 </exclusion>
                 <exclusion>
                     <groupId>org.jenkins-ci.plugins.workflow</groupId>
                     <artifactId>workflow-support</artifactId>
-                </exclusion>-->
+                </exclusion>
             </exclusions>
         </dependency>
-        <!--<dependency>
+        <dependency>
             <groupId>org.jenkins-ci.plugins.workflow</groupId>
             <artifactId>workflow-api</artifactId>
-            <version>2.5-optimized3-SNAPSHOT</version>
-        </dependency>-->
-        <!--<dependency>
+            <version>2.5</version>
+        </dependency>
+        <dependency>
             <groupId>org.jenkins-ci.plugins.workflow</groupId>
             <artifactId>workflow-support</artifactId>
-            <version>2.9-optimized2-SNAPSHOT</version>
-        </dependency>-->
+            <version>2.9</version>
+        </dependency>
         <dependency>
             <groupId>org.jenkins-ci.main</groupId>
             <artifactId>jenkins-core</artifactId>

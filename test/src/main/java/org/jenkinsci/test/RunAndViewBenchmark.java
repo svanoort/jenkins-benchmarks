@@ -33,19 +33,56 @@ import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
-public class StageViewBenchmark extends BaseBenchmark  {
+public class RunAndViewBenchmark extends BaseBenchmark  {
     Method benchmarkExecutionMethod;
     HttpClient client = new HttpClient();
     GetMethod method = new GetMethod("http://127.0.0.1:8080/jenkins/job/benchmarkPipeline/wfapi/runs?fullStages=true");
 
     @Benchmark
-    public Object stageViewBenchmark() throws Exception {
-        // We can't cast the actualRunnable to anything that isn't in the main harness package due to custom classloading
+    public Object benchmarkInvoker() throws Exception {
+        // Runs benchmark
         return benchmarkExecutionMethod.invoke(actualRunnable);
     }
 
+    public Object doBenchmark() throws Exception {
+        // We can't cast the actualRunnable to anything that isn't in the main harness package due to custom classloading
+        Jenkins jenkins = Jenkins.getInstance();
+        WorkflowJob p = jenkins.createProject(WorkflowJob.class, "benchmarkPipeline");
+        p.setDefinition(new CpsFlowDefinition("" +
+                "for (int i=0; i<15; i++) {\n" +
+                "    stage \"stage $i\" \n" +
+                "    echo \"ran my stage is $i\"        \n" +
+                "    node {\n" +
+                "        echo 'whoami';\n" +
+                "    }\n" +
+                "}\n" +
+                "node {sh'whoami';} \n"+
+                "\n" +
+                "stage 'label based'\n" +
+                "echo 'wait for executor'\n" +
+                "node {\n" +
+                "    stage 'things using node'\n" +
+                "    for (int i=0; i<200; i++) {\n" +
+                "        echo \"we waited for this $i seconds\"    \n" +
+                "    }\n" +
+                "}", true));
+        for (int i=0; i<10; i++) {  // These will run in parallel
+            WorkflowRun run = p.scheduleBuild2(0).get();
+            while (run.getExecution() == null || !run.getExecution().isComplete()) {
+                Thread.sleep(50);
+            }
+        }
+
+        WorkflowRun run = p.getLastBuild();
+        System.out.println("Iota: "+((CpsFlowExecution)run.getExecution()).iota());
+
+        client.executeMethod(method);
+        InputStream strm = new BufferedInputStream(method.getResponseBodyAsStream());
+        return new Integer(readAndCount(strm));
+    }
+
     public Class getTestClass() {
-        return StageViewBenchmark.class;
+        return RunAndViewBenchmark.class;
     }
 
     public boolean isSomethingHappening() {
@@ -82,22 +119,6 @@ public class StageViewBenchmark extends BaseBenchmark  {
         return count;
     }
 
-    public Object benchmarkStageView() throws Exception {
-        // Full HTTP request issuing
-
-//        GetMethod method = new GetMethod("http://localhost:8080/jenkins/job/benchmarkPipeline/wfapi/runs");
-        client.executeMethod(method);
-        InputStream strm = new BufferedInputStream(method.getResponseBodyAsStream());
-        return new Integer(readAndCount(strm));
-
-        /*
-        // Run just the pipeline analysis internals
-        WorkflowRun run = Jenkins.getInstance().getItemByFullName("benchmarkPipeline", WorkflowJob.class).getLastBuild();
-        RunExt ext = RunExt.createNew(run);
-        return ext;
-         */
-    }
-
     @Setup(Level.Trial)
     public void setupIterationInvoker() {
         try{
@@ -114,7 +135,7 @@ public class StageViewBenchmark extends BaseBenchmark  {
     public void setup() throws Exception {
         super.setup();
         this.actualRunnable.getClass().getMethod("printVersions").invoke(actualRunnable);
-        benchmarkExecutionMethod = actualRunnable.getClass().getMethod("benchmarkStageView");
+        benchmarkExecutionMethod = actualRunnable.getClass().getMethod("doBenchmark");
     }
 
     public void flushFlowNodeCache(WorkflowJob job) {
@@ -137,36 +158,6 @@ public class StageViewBenchmark extends BaseBenchmark  {
         try{
             Jenkins jenkins = Jenkins.getInstance();
             deleteProjects();
-            WorkflowJob p = jenkins.createProject(WorkflowJob.class, "benchmarkPipeline");
-            p.setDefinition(new CpsFlowDefinition("" +
-                    "for (int i=0; i<15; i++) {\n" +
-                    "    stage \"stage $i\" \n" +
-                    "    echo \"ran my stage is $i\"        \n" +
-                    "    node {\n" +
-                    "        echo 'whoami';\n" +
-                    "    }\n" +
-                    "}\n" +
-                    "node {sh'whoami';} \n"+
-                    "\n" +
-                    "stage 'label based'\n" +
-                    "echo 'wait for executor'\n" +
-                    "node {\n" +
-                    "    stage 'things using node'\n" +
-                    "    for (int i=0; i<200; i++) {\n" +
-                    "        echo \"we waited for this $i seconds\"    \n" +
-                    "    }\n" +
-                    "}", true));
-            for (int i=0; i<10; i++) {  // These will run in parallel
-                WorkflowRun run = p.scheduleBuild2(0).get();
-                while (run.getExecution() == null || !run.getExecution().isComplete()) {
-                    Thread.sleep(50);
-                }
-            }
-
-            WorkflowRun run = p.getLastBuild();
-            System.out.println("Iota: "+((CpsFlowExecution)run.getExecution()).iota());
-            flushFlowNodeCache(p);
-            System.gc(); //For a very good reason: weak reference caches
         } catch (Exception ex) {
             ex.printStackTrace();
             try {
@@ -213,12 +204,12 @@ public class StageViewBenchmark extends BaseBenchmark  {
     }
 
     public static void main(String[] args) throws Exception {
-        //Test the basic code
-        /*StageViewBenchmark bench = new StageViewBenchmark();
+        // Test the basic code
+        /*RunAndViewBenchmark bench = new RunAndViewBenchmark();
         try {
             bench.setup();
             bench.setupInvocationInvoker();
-            bench.stageViewBenchmark().toString();
+            bench.benchmarkInvoker().toString();
             bench.tearDownInvocationInvoker();
             bench.teardown();
         } catch (Exception ex) {
@@ -234,7 +225,7 @@ public class StageViewBenchmark extends BaseBenchmark  {
         Options opt = new OptionsBuilder()
                 // Specify which benchmarks to run.
                 // You can be more specific if you'd like to run only one benchmark per test.
-                .include(StageViewBenchmark.class.getName() + ".*")
+                .include(RunAndViewBenchmark.class.getName() + ".*")
                 // Set the following options as needed
                 .mode (Mode.AverageTime)
                 .timeUnit(TimeUnit.MILLISECONDS)
@@ -247,7 +238,8 @@ public class StageViewBenchmark extends BaseBenchmark  {
 //                .addProfiler(StackProfiler.class)
 //                .jvmArgsAppend("-Djmh.stack.lines=5")
                 .shouldFailOnError(true)
-                .shouldDoGC(true)
+                .jvmArgs("-XX:+UseG1GC", "-server", "-XX:+ParallelRefProcEnabled")
+//                .shouldDoGC(true)
                 .build();
         try {
             new Runner(opt).run();
